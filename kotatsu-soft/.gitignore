@@ -1,0 +1,18 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+
+# Game build outputs and logs
+game-client/dist/
+shared/logs/
+logs/*.log
+
+# OS files
+.DS_Store
+Thumbs.db
