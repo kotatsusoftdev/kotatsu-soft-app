@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # 1. AI社員 Bot 実行コンテナ
+  ai-core:
+    build:
+      context: ./ai-core
+      dockerfile: Dockerfile
+    container_name: kotatsu_ai_core
+    env_file:
+      - .env
+    volumes:
+      - ./ai-core:/app/ai-core
+      - ./shared:/app/shared
+      - ./game-projects:/app/game-projects
+    restart: unless-stopped
+
+  # 2. 撮影用 隔離デスクトップ環境 (Webブラウザでアクセス)
+  webtop:
+    image: lscr.io/linuxserver/webtop:ubuntu-xfce
+    container_name: kotatsu_webtop
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Tokyo
+      - SUBFOLDER=/
+    volumes:
+      - ./webtop-config:/config
+      - .:/config/workspace/kotatsu-soft
+    ports:
+      - 3000:3000
+      - 3001:3001
+    restart: unless-stopped

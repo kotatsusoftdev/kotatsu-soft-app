@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>10秒コタツミカンバスター</title>
+  <style>
+    :root{--bg:#f7efe6;--kotatsu:#a85f2a;--blanket:#c5383a;--text:#222}
+    html,body{height:100%;margin:0;background:linear-gradient(#fff,#f0f4ff);display:flex;align-items:center;justify-content:center;font-family:Arial,Helvetica,sans-serif;color:var(--text)}
+    .wrap{width:375px;height:667px;background:var(--bg);box-shadow:0 8px 24px rgba(0,0,0,.2);position:relative;overflow:hidden;touch-action:manipulation}
+    canvas{display:block;width:100%;height:100%;background:linear-gradient(#fff,#f0f4ff)}
+    .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column}
+    .title{font-size:20px;font-weight:700;margin-bottom:8px}
+    .subtitle{font-size:12px;color:#444;margin-bottom:18px}
+    .btn{background:var(--blanket);color:#fff;padding:10px 18px;border-radius:8px;border:none;cursor:pointer;font-weight:700}
+    .hud{position:absolute;left:12px;top:12px;font-weight:700;background:rgba(255,255,255,0.8);padding:6px 8px;border-radius:8px}
+    .score{position:absolute;right:12px;top:12px;font-weight:700;background:rgba(255,255,255,0.8);padding:6px 8px;border-radius:8px}
+    .result{background:rgba(255,255,255,0.95);padding:18px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.15);text-align:center}
+    .small{font-size:12px;color:#666}
+    /* スマホでのズーム防止の補助 */
+    meta[name=viewport]{}
+  </style>
+</head>
+<body>
+  <div class="wrap" id="gameWrap">
+    <canvas id="c" width="375" height="667"></canvas>
+    <div class="hud" id="timer">10.000s</div>
+    <div class="score" id="score">Score: 0</div>
+
+    <div class="overlay" id="titleScreen">
+      <div class="title">10秒コタツミカンバスター</div>
+      <div class="subtitle">コタツを守れ！ミカンで敵を撃退しよう</div>
+      <button class="btn" id="startBtn">スタート</button>
+    </div>
+
+    <div class="overlay" id="resultScreen" style="display:none;pointer-events:auto">
+      <div class="result" id="resultBox">
+        <div style="font-size:18px;font-weight:800" id="finalScore">Score: 0</div>
+        <div class="small" id="titleAward">称号：コタツの亡者</div>
+        <div style="height:12px"></div>
+        <button class="btn" id="retryBtn">もう一度遊ぶ</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- 簡易設定 ---
+    const WIDTH = 375, HEIGHT = 667
+    const canvas = document.getElementById('c')
+    const ctx = canvas.getContext('2d')
+    const timerEl = document.getElementById('timer')
+    const scoreEl = document.getElementById('score')
+    const titleScreen = document.getElementById('titleScreen')
+    const resultScreen = document.getElementById('resultScreen')
+    const startBtn = document.getElementById('startBtn')
+    const retryBtn = document.getElementById('retryBtn')
+    const finalScore = document.getElementById('finalScore')
+    const titleAward = document.getElementById('titleAward')
+
+    // --- 音 ---
+    let audioCtx
+    function ensureAudio(){ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)() }
+    function playShot(){ try{ ensureAudio(); const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.type='sine'; o.frequency.value=880; g.gain.value=0.06; o.connect(g); g.connect(audioCtx.destination); o.start(); setTimeout(()=>{o.stop()},60)}catch(e){} }
+    function playHit(){ try{ ensureAudio(); const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.type='square'; o.frequency.value=440; g.gain.value=0.12; o.connect(g); g.connect(audioCtx.destination); const now=audioCtx.currentTime; o.start(now); g.gain.exponentialRampToValueAtTime(0.001, now+0.12); setTimeout(()=>o.stop(),140)}catch(e){} }
+
+    // --- ゲーム状態 ---
+    let state='Title'
+    let score=0
+    let startTime=0
+    let elapsed=0
+    let duration=10000
+    let lastSpawn=0
+    let projectiles=[]
+    let enemies=[]
+    let particles=[]
+    let pointerDown=false
+    let autoFireId=null
+
+    // --- プレイヤー（コタツ） ---
+    const player = {x:WIDTH/2, y: HEIGHT-72, w:140, h:48}
+
+    // --- 敵定義 ---
+    const ENEMY_TYPES = [
+      {name:'寒気',emoji:'❄️',hp:1,score:10,spd:120},
+      {name:'睡魔',emoji:'🥱',hp:3,score:50,spd:60},
+      {name:'コタツ泥棒',emoji:'🐱',hp:1,score:100,spd:180}
+    ]
+
+    function spawnEnemy(){
+      const t = Math.random()
+      let type
+      if(t<0.6) type=ENEMY_TYPES[0]
+      else if(t<0.9) type=ENEMY_TYPES[1]
+      else type=ENEMY_TYPES[2]
+      const e={x:Math.random()*(WIDTH-40)+20,y:-30,r:20,ty:type,hp:type.hp,penalized:false}
+      enemies.push(e)
+    }
+
+    // --- 発射 ---
+    function fire(){
+      if(state!=='Playing') return
+      const remaining = Math.max(0, duration - (Date.now()-startTime))
+      const isFever = remaining <= 3000
+      const angles = isFever?[-0.28,0,0.28]:[0]
+      angles.forEach(a=>{
+        const vx = Math.sin(a)*6
+        const vy = -12*Math.cos(a)
+        projectiles.push({x:player.x,y:player.y-10,r:8,vx:vx,vy:vy})
+      })
+      playShot()
+    }
+
+    // --- 衝突 ---
+    function collide(a,b){
+      const dx=a.x-b.x, dy=a.y-b.y
+      const r = (a.r||0)+(b.r||0)
+      return dx*dx+dy*dy <= r*r
+    }
+
+    // --- ループ ---
+    function update(dt){
+      if(state!=='Playing') return
+      const now = Date.now()
+      elapsed = now - startTime
+      const remaining = Math.max(0, duration - elapsed)
+      timerEl.textContent = (remaining/1000).toFixed(3) + 's'
+
+      // 敵生成
+      if(now - lastSpawn > 500 + Math.random()*700){ lastSpawn = now; spawnEnemy() }
+
+      // update projectiles
+      for(let i=projectiles.length-1;i>=0;i--){
+        const p=projectiles[i]
+        p.x += p.vx
+        p.y += p.vy
+        p.vy += 0.4
+        if(p.y < -20 || p.y>HEIGHT+20 || p.x<-50 || p.x>WIDTH+50) projectiles.splice(i,1)
+      }
+
+      // update enemies
+      for(let i=enemies.length-1;i>=0;i--){
+        const e=enemies[i]
+        e.y += (e.ty.spd||100)*(dt/1000)
+        // 到達ペナルティ
+        if(e.y > HEIGHT-40 && !e.penalized){ score -= 50; e.penalized=true }
+        if(e.y > HEIGHT+60){ enemies.splice(i,1); continue }
+        // check collisions
+        for(let j=projectiles.length-1;j>=0;j--){
+          const p=projectiles[j]
+          if(collide(p,e)){
+            projectiles.splice(j,1)
+            e.hp--
+            particles.push({x:e.x,y:e.y,life:300})
+            if(e.hp<=0){ score += e.ty.score; playHit(); enemies.splice(i,1) }
+            break
+          }
+        }
+      }
+
+      // particles
+      for(let i=particles.length-1;i>=0;i--){
+        particles[i].life -= dt
+        if(particles[i].life<=0) particles.splice(i,1)
+      }
+
+      scoreEl.textContent = 'Score: ' + score
+
+      if(remaining<=0){ endGame() }
+    }
+
+    function endGame(){
+      state='Result'
+      resultScreen.style.display='flex'
+      finalScore.textContent = 'Score: ' + Math.max(0,score)
+      let title='称号：コタツの亡者'
+      const s = Math.max(0,score)
+      if(s>=1000) title='称号：コタツの守護神'
+      else if(s>=500) title='称号：ミカン愛好家'
+      titleAward.textContent = title
+    }
+
+    // --- 描画 ---
+    function draw(){
+      // clear
+      ctx.clearRect(0,0,WIDTH,HEIGHT)
+      // background simple
+      ctx.fillStyle = '#f7efe6'
+      ctx.fillRect(0,0,WIDTH,HEIGHT)
+
+      // draw enemies
+      enemies.forEach(e=>{
+        ctx.font = '26px serif'
+        ctx.textAlign='center'
+        ctx.fillText(e.ty.emoji, e.x, e.y)
+      })
+
+      // draw projectiles
+      projectiles.forEach(p=>{
+        ctx.font='22px serif'
+        ctx.fillText('🍊', p.x, p.y)
+      })
+
+      // particles
+      particles.forEach(p=>{
+        const t = p.life/300
+        ctx.fillStyle = `rgba(255,165,0,${t})`
+        ctx.beginPath(); ctx.arc(p.x, p.y, 6*(t+0.2), 0, Math.PI*2); ctx.fill()
+      })
+
+      // draw kotatsu (player)
+      // blanket
+      ctx.fillStyle = '#c5383a'
+      ctx.fillRect(player.x - 70, player.y - 6, 140, 28)
+      // legs / base
+      ctx.fillStyle = '#a85f2a'
+      ctx.fillRect(player.x - 80, player.y + 20, 160, 22)
+      // mikan on top
+      ctx.font='20px serif'
+      ctx.fillText('🍊', player.x+40, player.y+2)
+
+      requestAnimationFrame(draw)
+    }
+
+    // --- メインループ ---
+    let last = Date.now()
+    function loop(){
+      const now = Date.now()
+      const dt = now - last
+      last = now
+      update(dt)
+      setTimeout(loop, 16)
+    }
+
+    // --- 入力 ---
+    function startGame(){
+      score = 0; projectiles=[]; enemies=[]; particles=[]
+      state='Playing'; titleScreen.style.display='none'; resultScreen.style.display='none'
+      startTime = Date.now(); lastSpawn = Date.now(); last = Date.now()
+      // ensure audio context created on user gesture
+      ensureAudio()
+    }
+
+    startBtn.addEventListener('click', ()=>{ startGame(); if(state==='Playing'){ loop(); } })
+    retryBtn.addEventListener('click', ()=>{ startGame() })
+
+    // pointer events
+    const wrap = document.getElementById('gameWrap')
+    wrap.addEventListener('pointerdown', e=>{
+      pointerDown=true
+      fire()
+      // auto fire when holding
+      if(autoFireId) clearInterval(autoFireId)
+      autoFireId = setInterval(fire, 120)
+    })
+    window.addEventListener('pointerup', ()=>{ pointerDown=false; if(autoFireId){ clearInterval(autoFireId); autoFireId=null } })
+
+    // keyboard
+    window.addEventListener('keydown', e=>{ if(e.code==='Space'){ e.preventDefault(); fire() } })
+
+    // resize handling for crisp canvas
+    function fitCanvas(){ const ratio = WIDTH/HEIGHT; const w = wrap.clientWidth; const h = wrap.clientHeight; canvas.style.width = w+'px'; canvas.style.height = h+'px'; const device = window.devicePixelRatio||1; canvas.width = WIDTH*device; canvas.height = HEIGHT*device; ctx.setTransform(device,0,0,device,0,0) }
+    window.addEventListener('resize', fitCanvas)
+    fitCanvas()
+
+    // start draw loop immediately (rendering) - game loop started on start
+    requestAnimationFrame(draw)
+
+    // prevent context menu on long-press
+    window.addEventListener('contextmenu', e=>e.preventDefault())
+
+    // expose a gentle start if user clicks outside start (focus)
+    wrap.addEventListener('click', ()=>{ if(state==='Title'){ /* do nothing */ } })
+
+  </script>
+</body>
+</html>

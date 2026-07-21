@@ -9,10 +9,13 @@ __pycache__/
 .env
 
 # Game build outputs and logs
-game-client/dist/
+game-projects/**/dist/
 shared/logs/
 logs/*.log
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local desktop/container runtime artifacts
+webtop-config/
