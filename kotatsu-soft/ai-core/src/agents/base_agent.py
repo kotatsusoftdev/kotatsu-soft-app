@@ -1,9 +1,13 @@
+import asyncio
 import yaml
 from abc import ABC, abstractmethod
 from typing import Any
 
 
 class BaseAgent(ABC):
+    LLM_TIMEOUT_SECONDS = 45
+    LLM_MAX_RETRIES = 2
+
     def __init__(self, config_path: str, avatar_url: str, mention_id: str):
         with open(config_path, "r", encoding="utf-8") as f:
             self.config = yaml.safe_load(f)
@@ -24,6 +28,58 @@ class BaseAgent(ABC):
 
         self.temperature = llm_config["temperature"]
         self.model_name = llm_config["model"]
+
+    async def generate_content_with_retry(
+        self,
+        *,
+        client: Any,
+        model: str,
+        contents: str,
+        config: Any,
+        request_name: str,
+    ) -> Any:
+        last_error: Exception | None = None
+        total_attempts = self.LLM_MAX_RETRIES + 1
+        for attempt in range(total_attempts):
+            attempt_no = attempt + 1
+            print(
+                f"[llm] request='{request_name}' attempt={attempt_no}/{total_attempts} model='{model}' timeout={self.LLM_TIMEOUT_SECONDS}s"
+            )
+            try:
+                return await asyncio.wait_for(
+                    asyncio.to_thread(
+                        client.models.generate_content,
+                        model=model,
+                        contents=contents,
+                        config=config,
+                    ),
+                    timeout=self.LLM_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError as exc:
+                last_error = exc
+                print(
+                    f"[llm] request='{request_name}' attempt={attempt_no}/{total_attempts} timed out after {self.LLM_TIMEOUT_SECONDS}s"
+                )
+                if attempt >= self.LLM_MAX_RETRIES:
+                    break
+            except Exception as exc:
+                last_error = exc
+                print(
+                    f"[llm] request='{request_name}' attempt={attempt_no}/{total_attempts} failed: {exc.__class__.__name__}: {exc}"
+                )
+                if attempt >= self.LLM_MAX_RETRIES:
+                    break
+
+            # Exponential backoff to absorb transient API instability.
+            backoff_seconds = 1.2 * (2 ** attempt)
+            print(
+                f"[llm] request='{request_name}' retrying after {backoff_seconds:.1f}s backoff"
+            )
+            await asyncio.sleep(backoff_seconds)
+
+        raise RuntimeError(
+            f"{request_name} failed after retries (timeout={self.LLM_TIMEOUT_SECONDS}s, retries={self.LLM_MAX_RETRIES})"
+        ) from last_error
 
     def build_system_instruction(self) -> str:
         agent_config = self.config.get("agent", {})

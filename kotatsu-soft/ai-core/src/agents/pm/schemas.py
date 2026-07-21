@@ -3,14 +3,11 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
-ALLOWED_PHASES = {"DIVERGENCE", "CONFLICT", "FINAL"}
-
-
 class PMDecision(BaseModel):
     speech: str = Field(
         ...,
         description=(
-            "Discordのチャット上に投稿する発言文。他メンバーや社長を指名する場合は '@ジャイアン(マーケ)' や '@タカ杉くん(エンジニア)' 等のメンションを含める。"
+            "Discordのチャット上に投稿する発言文。他メンバーや社長を指名する場合は '@ヂャイアン(マーケ)' や '@スゴ杉くん(エンジニア)' 等のメンションを含める。"
         ),
     )
     phase: Literal["DIVERGENCE", "CONFLICT", "FINAL"] = Field(
@@ -19,7 +16,7 @@ class PMDecision(BaseModel):
             "現在の会議フェーズ。ターンに応じて発散、衝突、最終集約のいずれかを表す。"
         ),
     )
-    next_action: str = Field(
+    next_action: Literal["CALL_AGENT", "FINISH_FOR_PRESIDENT"] = Field(
         ...,
         description=(
             "次に実行するアクション。議論を継続する場合は 'CALL_AGENT'、提案がまとまり社長に引き渡す場合は 'FINISH_FOR_PRESIDENT'."

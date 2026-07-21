@@ -1,5 +1,6 @@
 import asyncio
 from pathlib import Path
+import re
 from typing import Awaitable, Callable, Optional
 
 import aiohttp
@@ -11,6 +12,9 @@ from agents.pm.schemas import PMDecision
 
 class DynamicOrchestrator:
     WEBHOOK_NAME = "Kotatsu AI 会話"
+    _DEADLINE_REMINDER_RE = re.compile(
+        r"^\s*(?:[-・*]\s*)?議論できるのはあと\s*\d+\s*回よ。そろそろ絞り込みましょう\s*\n*"
+    )
 
     def __init__(
         self,
@@ -24,6 +28,68 @@ class DynamicOrchestrator:
         self.other_agents = other_agents
         self.president_mention = president_mention
         self.channel_webhooks: dict[int, discord.Webhook] = {}
+
+    @staticmethod
+    def _expected_phase_for_turn(current_turn: int) -> str:
+        if current_turn <= 4:
+            return "DIVERGENCE"
+        if current_turn <= 8:
+            return "CONFLICT"
+        return "FINAL"
+
+    @staticmethod
+    def _deadline_prefix(current_turn: int, max_turns: int) -> str:
+        remaining = max(max_turns - current_turn + 1, 0)
+        return f"議論できるのはあと{remaining}回よ。そろそろ絞り込みましょう"
+
+    @classmethod
+    def _strip_leading_deadline_reminders(cls, text: Optional[str]) -> str:
+        cleaned = (text or "").lstrip()
+        while True:
+            match = cls._DEADLINE_REMINDER_RE.match(cleaned)
+            if not match:
+                break
+            cleaned = cleaned[match.end():].lstrip()
+        return cleaned
+
+    def _ensure_deadline_prefix(self, text: Optional[str], current_turn: int, max_turns: int) -> str:
+        body = self._strip_leading_deadline_reminders(text)
+        if current_turn < 5:
+            return body
+
+        prefix = self._deadline_prefix(current_turn, max_turns)
+        if not body:
+            return prefix
+        return f"{prefix}\n{body}"
+
+    @staticmethod
+    def _contains_any(text: str, keywords: tuple[str, ...]) -> bool:
+        return any(keyword in text for keyword in keywords)
+
+    def _looks_like_expansion(self, text: str) -> bool:
+        expansion_words = (
+            "新しい案",
+            "追加",
+            "さらに案",
+            "新機能",
+            "別ジャンル",
+            "もう1案",
+            "アイデアを増",
+            "広げ",
+        )
+        return self._contains_any(text, expansion_words)
+
+    def _looks_like_narrowing(self, text: str) -> bool:
+        narrowing_words = (
+            "削",
+            "捨",
+            "絞",
+            "二者択一",
+            "どちら",
+            "トレードオフ",
+            "優先",
+        )
+        return self._contains_any(text, narrowing_words)
 
     @staticmethod
     def _split_discord_message(text: str, limit: int = 2000) -> list[str]:
@@ -129,15 +195,15 @@ class DynamicOrchestrator:
         consulted = set()
         for line in history:
             if (
-                "ジャイアン(マーケ)" in line
-                or "@ジャイアン(マーケ)" in line
+                "ヂャイアン(マーケ)" in line
+                or "@ヂャイアン(マーケ)" in line
                 or "Gian_Agent" in line
                 or "@Gian_Agent" in line
             ):
                 consulted.add("marketing")
             if (
-                "タカ杉くん(エンジニア)" in line
-                or "@タカ杉くん(エンジニア)" in line
+                "スゴ杉くん(エンジニア)" in line
+                or "@スゴ杉くん(エンジニア)" in line
                 or "Takasugi_Agent" in line
                 or "@Takasugi_Agent" in line
             ):
@@ -157,6 +223,7 @@ class DynamicOrchestrator:
         final_decision: Optional[PMDecision] = None
         consulted_counts: dict[str, int] = {"marketing": 0, "dev": 0}
         per_role_min = 2
+        force_convergence_next_turn = False
 
         while current_turn <= max_turns:
             try:
@@ -166,7 +233,9 @@ class DynamicOrchestrator:
                     current_turn,
                     max_turns,
                     revision_guidance=revision_guidance,
+                    force_convergence=force_convergence_next_turn,
                 )
+                force_convergence_next_turn = False
             except Exception as exc:
                 error_text = str(exc)
                 if len(error_text) > 1200:
@@ -174,11 +243,55 @@ class DynamicOrchestrator:
                 content = f"⚠️ PMエージェント応答中にエラーが発生しました: {error_text}"
                 try:
                     await channel.send(content)
-                except Exception:
-                    await channel.send(
-                        "⚠️ PMエージェント応答中にエラーが発生しました。詳細はログを確認してください。"
-                    )
+                except Exception as send_exc:
+                    print(f"[orchestrator] Failed to report PM error in channel: {send_exc}")
                 break
+
+            # hard guardrail: turn-based phase goal validation and convergence escalation
+            expected_phase = self._expected_phase_for_turn(current_turn)
+            phase_drift = decision.phase != expected_phase
+            if phase_drift:
+                await channel.send(
+                    "⚠️ 進行フェーズがターン目標から逸脱しています。"
+                    f" Turn {current_turn} は {expected_phase} フェーズとして強制収束モードへ移行します。"
+                )
+                force_convergence_next_turn = True
+                decision.phase = expected_phase
+
+            if current_turn >= 5:
+                decision.speech = self._ensure_deadline_prefix(
+                    decision.speech,
+                    current_turn,
+                    max_turns,
+                )
+                if decision.next_action == "CALL_AGENT":
+                    decision.instruction_for_target = self._ensure_deadline_prefix(
+                        decision.instruction_for_target,
+                        current_turn,
+                        max_turns,
+                    )
+
+            if 5 <= current_turn <= 8 and decision.next_action == "CALL_AGENT":
+                current_instruction = (decision.instruction_for_target or "").strip()
+                if not self._looks_like_narrowing(current_instruction):
+                    force_convergence_next_turn = True
+                    decision.instruction_for_target = (
+                        f"{self._deadline_prefix(current_turn, max_turns)}\n"
+                        "ここからは衝突・削ぎ落としフェーズです。"
+                        "残す要素と捨てる要素を明示し、二者択一でどちらを削るかを決めてください。"
+                        "新規アイデアの追加は禁止し、1日実装可能性と面白さのトレードオフを必ず示してください。"
+                    )
+
+            if current_turn in (8, 9):
+                inspection_text = (decision.speech or "") + "\n" + (decision.instruction_for_target or "")
+                if self._looks_like_expansion(inspection_text):
+                    force_convergence_next_turn = True
+                    if decision.next_action == "CALL_AGENT":
+                        decision.instruction_for_target = (
+                            f"{self._deadline_prefix(current_turn, max_turns)}\n"
+                            "終盤のため新しい大風呂敷は禁止。これまでの候補から削る対象を2つ挙げ、"
+                            "どちらを捨てるかを今ターンで決め、最終的に残す1案の核だけを返答してください。"
+                        )
 
             try:
                 await self._post_via_webhook(self.pm, decision.speech, channel)

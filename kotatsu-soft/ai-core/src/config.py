@@ -1,16 +1,18 @@
 import os
-import sys
 from dataclasses import dataclass
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
+class ConfigError(ValueError):
+    pass
+
+
 def _require_env(key: str) -> str:
     value = os.getenv(key)
     if not value:
-        print(f"[config] 環境変数 '{key}' が設定されていません。.env を確認してください。", file=sys.stderr)
-        sys.exit(1)
+        raise ConfigError(f"[config] 環境変数 '{key}' が設定されていません。.env を確認してください。")
     return value
 
 
@@ -18,8 +20,7 @@ def _validate_int(value: str, key: str) -> int:
     try:
         return int(value)
     except ValueError:
-        print(f"[config] 環境変数 '{key}' の値が正しい整数ではありません: {value}", file=sys.stderr)
-        sys.exit(1)
+        raise ConfigError(f"[config] 環境変数 '{key}' の値が正しい整数ではありません: {value}")
 
 
 @dataclass(frozen=True)
@@ -46,4 +47,11 @@ class Config:
         )
 
 
-config = Config.load()
+_config: Config | None = None
+
+
+def get_config() -> Config:
+    global _config
+    if _config is None:
+        _config = Config.load()
+    return _config
