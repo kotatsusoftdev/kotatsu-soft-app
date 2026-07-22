@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KOTATSU SOFT | Browser Games</title>
+  <style>
+    :root {
+      --bg-0: #fff8ef;
+      --bg-1: #ffe5bf;
+      --bg-2: #ffd095;
+      --ink: #1f1a17;
+      --ink-soft: #5e4f45;
+      --brand-red: #bf2f2f;
+      --brand-brown: #7f4a2e;
+      --brand-cream: #fff4df;
+      --card: rgba(255, 250, 242, 0.78);
+      --stroke: rgba(87, 50, 34, 0.18);
+      --shadow: 0 24px 60px rgba(84, 44, 13, 0.18);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 520px at 94% -6%, rgba(255, 255, 255, 0.65), transparent 70%),
+        radial-gradient(640px 380px at 12% 22%, rgba(255, 255, 255, 0.38), transparent 64%),
+        linear-gradient(165deg, var(--bg-0) 0%, var(--bg-1) 52%, var(--bg-2) 100%);
+      font-family: "Avenir Next", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    }
+
+    .grain {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.11;
+      background-image:
+        radial-gradient(circle at 1px 1px, #000 0.7px, transparent 0.7px);
+      background-size: 5px 5px;
+      mix-blend-mode: multiply;
+    }
+
+    .scene {
+      width: min(1120px, calc(100% - 28px));
+      margin: 14px auto 32px;
+      border: 1px solid var(--stroke);
+      border-radius: 24px;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(255, 245, 229, 0.72));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(4px);
+    }
+
+    header {
+      position: relative;
+      padding: 24px clamp(16px, 3vw, 34px) 10px;
+      background:
+        linear-gradient(90deg, rgba(191, 47, 47, 0.96), rgba(127, 74, 46, 0.9));
+      color: #fff5e6;
+      isolation: isolate;
+      overflow: hidden;
+    }
+
+    header::after {
+      content: "";
+      position: absolute;
+      right: -90px;
+      top: -110px;
+      width: 270px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.24);
+      filter: blur(1px);
+      z-index: -1;
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    .logo {
+      letter-spacing: 0.22em;
+      font-weight: 800;
+      font-size: clamp(1.05rem, 2vw, 1.45rem);
+      margin: 0;
+      text-transform: uppercase;
+    }
+
+    .tag {
+      margin: 0;
+      font-size: 0.82rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #ffe8cc;
+    }
+
+    .hero {
+      padding: 30px clamp(16px, 4vw, 40px) 24px;
+      display: grid;
+      gap: 26px;
+      grid-template-columns: 1.2fr 1fr;
+      align-items: end;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(1.7rem, 4.4vw, 3.15rem);
+      line-height: 1.07;
+      letter-spacing: 0.01em;
+    }
+
+    .hero p {
+      margin: 14px 0 0;
+      color: var(--ink-soft);
+      font-size: clamp(0.97rem, 1.6vw, 1.08rem);
+      line-height: 1.7;
+      max-width: 54ch;
+    }
+
+    .hero-note {
+      justify-self: end;
+      width: min(100%, 340px);
+      border: 1px solid var(--stroke);
+      border-radius: 16px;
+      background: linear-gradient(180deg, #fff5e8, #ffe4c0);
+      padding: 16px;
+      box-shadow: 0 10px 24px rgba(82, 48, 20, 0.14);
+      transform: rotate(-1.5deg);
+      animation: floatCard 4.7s ease-in-out infinite;
+    }
+
+    .hero-note strong {
+      display: block;
+      margin-bottom: 8px;
+      color: #7b2f12;
+      font-size: 0.95rem;
+      letter-spacing: 0.04em;
+    }
+
+    .hero-note p {
+      margin: 0;
+      color: #4a3729;
+      font-size: 0.92rem;
+      line-height: 1.55;
+    }
+
+    main {
+      padding: 10px clamp(14px, 3vw, 32px) 34px;
+    }
+
+    .sec-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 12px 0 14px;
+    }
+
+    .sec-head h2 {
+      margin: 0;
+      letter-spacing: 0.05em;
+      font-size: clamp(1.12rem, 1.9vw, 1.5rem);
+    }
+
+    .sec-head p {
+      margin: 0;
+      color: #705f53;
+      font-size: 0.9rem;
+    }
+
+    .game-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .game-card {
+      display: grid;
+      gap: 12px;
+      background: var(--card);
+      border: 1px solid var(--stroke);
+      border-radius: 18px;
+      overflow: hidden;
+      padding: 12px;
+      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+      box-shadow: 0 12px 30px rgba(88, 53, 21, 0.14);
+    }
+
+    .game-card:hover,
+    .game-card:focus-within {
+      transform: translateY(-3px);
+      border-color: rgba(191, 47, 47, 0.45);
+      box-shadow: 0 16px 34px rgba(88, 53, 21, 0.24);
+    }
+
+    .thumb {
+      height: 154px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.36);
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      color: #ffffff;
+      font-weight: 800;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+      letter-spacing: 0.08em;
+      font-size: 1.05rem;
+    }
+
+    .thumb.mikan {
+      background:
+        radial-gradient(180px 88px at 78% 18%, rgba(255, 255, 255, 0.3), transparent 65%),
+        linear-gradient(135deg, #b22b2f, #d95d2f 54%, #f3a235);
+    }
+
+    .thumb.nyanko {
+      background:
+        radial-gradient(200px 100px at 18% 6%, rgba(255, 255, 255, 0.23), transparent 68%),
+        linear-gradient(135deg, #17243f, #253f70 52%, #3f65a6);
+    }
+
+    .game-card h3 {
+      margin: 0;
+      font-size: 1.12rem;
+    }
+
+    .game-card p {
+      margin: 0;
+      color: #57483f;
+      font-size: 0.93rem;
+      line-height: 1.55;
+    }
+
+    .actions {
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: #6f5a4d;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(110, 77, 59, 0.24);
+      border-radius: 999px;
+      padding: 6px 10px;
+    }
+
+    .play {
+      text-decoration: none;
+      color: #fff;
+      background: linear-gradient(90deg, #bf2f2f, #cf5632);
+      border-radius: 11px;
+      padding: 8px 12px;
+      font-size: 0.9rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      transition: filter 160ms ease, transform 160ms ease;
+    }
+
+    .play:hover,
+    .play:focus-visible {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+
+    .studio {
+      margin-top: 24px;
+      border-radius: 16px;
+      background: linear-gradient(180deg, #f9efe3, #fee4be);
+      border: 1px solid var(--stroke);
+      padding: 16px;
+      display: grid;
+      gap: 10px;
+      color: #4a3729;
+      box-shadow: 0 10px 26px rgba(88, 53, 21, 0.1);
+    }
+
+    .studio h3 {
+      margin: 0;
+      font-size: 1rem;
+      color: #7b2f12;
+      letter-spacing: 0.04em;
+    }
+
+    .studio p {
+      margin: 0;
+      font-size: 0.92rem;
+      line-height: 1.7;
+    }
+
+    footer {
+      padding: 14px 18px 18px;
+      color: #755f50;
+      font-size: 0.79rem;
+      text-align: center;
+      letter-spacing: 0.02em;
+    }
+
+    .fade-up {
+      opacity: 0;
+      transform: translateY(18px);
+      animation: fadeUp 700ms ease forwards;
+    }
+
+    .fade-up:nth-child(2) { animation-delay: 80ms; }
+    .fade-up:nth-child(3) { animation-delay: 140ms; }
+
+    @keyframes fadeUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes floatCard {
+      0%, 100% { transform: rotate(-1.5deg) translateY(0); }
+      50% { transform: rotate(-0.2deg) translateY(-4px); }
+    }
+
+    @media (max-width: 900px) {
+      .hero {
+        grid-template-columns: 1fr;
+        align-items: start;
+      }
+
+      .hero-note {
+        justify-self: start;
+      }
+
+      .game-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div class="scene">
+    <header>
+      <div class="brand-row">
+        <p class="logo">KOTATSU SOFT</p>
+        <p class="tag">Warm, Tiny, Playful Web Games</p>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="fade-up">
+        <h1>コタツの上で、<br />すぐ遊べるミニゲーム。</h1>
+        <p>
+          KOTATSU SOFT は、短時間で熱中できるブラウザゲームを制作する小さなスタジオです。
+          クリックやタップだけで、だれでも今すぐ遊べます。
+        </p>
+      </div>
+      <aside class="hero-note fade-up">
+        <strong>Now Serving</strong>
+        <p>
+          ・10秒コタツミカンバスター<br />
+          ・ニャンコ・ダイブ！<br />
+          プレイ時間はどちらも 1 分以内。休憩時間にどうぞ。
+        </p>
+      </aside>
+    </section>
+
+    <main>
+      <div class="sec-head">
+        <h2>Game Select</h2>
+        <p>気分で選んで、すぐスタート</p>
+      </div>
+
+      <div class="game-grid">
+        <article class="game-card fade-up">
+          <div class="thumb mikan" aria-hidden="true">MIKAN BUSTER</div>
+          <h3>10秒コタツミカンバスター</h3>
+          <p>ミカンを撃ってコタツを防衛。短時間でスコアを伸ばすシューティング。</p>
+          <div class="actions">
+            <span class="pill">Shooter / 10 sec</span>
+            <a class="play" href="./001_mikan_buster/src/index.html">Play</a>
+          </div>
+        </article>
+
+        <article class="game-card fade-up">
+          <div class="thumb nyanko" aria-hidden="true">NYANKO DIVE</div>
+          <h3>ニャンコ・ダイブ！</h3>
+          <p>ネコを積み上げるワンアクションバランスゲーム。ズレたら宇宙へダイブ。</p>
+          <div class="actions">
+            <span class="pill">Stack Action</span>
+            <a class="play" href="./002_nyanko_dive/src/index.html">Play</a>
+          </div>
+        </article>
+      </div>
+
+      <section class="studio">
+        <h3>About KOTATSU SOFT</h3>
+        <p>設計思想は シンプル入力 と 気持ちいい失敗。プレイしてすぐ笑える体験を目指しています。</p>
+      </section>
+    </main>
+
+    <footer>
+      Copyright 2026 KOTATSU SOFT. All rights reserved.
+    </footer>
+  </div>
+</body>
+</html>

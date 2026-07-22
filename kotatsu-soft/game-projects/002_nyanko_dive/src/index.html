@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>ニャンコ・ダイブ！ ～全宇宙ネコ積み上げ計画～</title>
+  <style>
+    :root {
+      --bg-a: #02030a;
+      --bg-b: #071326;
+      --panel: #0d1b33;
+      --ink: #eaf4ff;
+      --accent: #ffd452;
+      --danger: #ff6a88;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      background:
+        radial-gradient(circle at 12% 8%, #13203c 0%, transparent 22%),
+        radial-gradient(circle at 84% 18%, #1a1f4a 0%, transparent 20%),
+        linear-gradient(180deg, var(--bg-b) 0%, var(--bg-a) 100%);
+      color: var(--ink);
+      font-family: "Trebuchet MS", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    .wrap {
+      width: min(94vw, 420px);
+      display: grid;
+      gap: 10px;
+      justify-items: center;
+    }
+
+    .topbar {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .home-link {
+      text-decoration: none;
+      color: #d5e8ff;
+      border: 1px solid rgba(213, 232, 255, 0.45);
+      background: rgba(21, 35, 62, 0.7);
+      border-radius: 999px;
+      padding: 6px 11px;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      transition: background 140ms ease, transform 140ms ease;
+    }
+
+    .home-link:hover,
+    .home-link:focus-visible {
+      background: rgba(40, 65, 110, 0.78);
+      transform: translateY(-1px);
+    }
+
+    .brand {
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      color: #aac4e7;
+      opacity: 0.95;
+    }
+
+    canvas {
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      border: 2px solid #c9dcff2b;
+      border-radius: 16px;
+      background: #000;
+      box-shadow:
+        0 16px 44px rgba(0, 0, 0, 0.46),
+        0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+      display: block;
+    }
+
+    .hint {
+      font-size: 12px;
+      letter-spacing: 0.03em;
+      color: #bfd1ec;
+      opacity: 0.85;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="home-link" href="../../index.html">KOTATSU SOFT へ戻る</a>
+      <div class="brand">NYANKO DIVE</div>
+    </div>
+    <canvas id="game" width="400" height="600" aria-label="ニャンコ・ダイブ"></canvas>
+    <div class="hint">PC: クリック / Space ・ スマホ: タップ</div>
+  </div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+
+      const W = canvas.width;
+      const H = canvas.height;
+
+      const STATE = {
+        TITLE: "TITLE",
+        PLAYING: "PLAYING",
+        GAMEOVER: "GAMEOVER",
+      };
+
+      const CAT_W = 72;
+      const CAT_H = 36;
+
+      const BASE = {
+        x: W / 2,
+        y: H - 54,
+        w: 200,
+        h: 30,
+      };
+
+      let state = STATE.TITLE;
+      let score = 0;
+      let stackedCats = [];
+      let activeCat = null;
+      let diveCat = null;
+      let lastTime = 0;
+
+      const stars = createStars(72);
+
+      function createStars(count) {
+        const arr = [];
+        for (let i = 0; i < count; i++) {
+          arr.push({
+            x: Math.random() * W,
+            y: Math.random() * H,
+            r: Math.random() * 1.7 + 0.3,
+            a: Math.random() * 0.7 + 0.25,
+            t: Math.random() * Math.PI * 2,
+            s: Math.random() * 0.02 + 0.005
+          });
+        }
+        return arr;
+      }
+
+      function resetGame() {
+        score = 0;
+        stackedCats = [];
+        diveCat = null;
+        spawnActiveCat();
+      }
+
+      function startGame() {
+        resetGame();
+        state = STATE.PLAYING;
+      }
+
+      function spawnActiveCat() {
+        const spd = Math.min(2.2 + score * 0.13, 7.2);
+        activeCat = {
+          x: W / 2,
+          y: 50,
+          vx: spd * (Math.random() < 0.5 ? -1 : 1),
+          mode: "moving",
+          vy: 0
+        };
+      }
+
+      function topSupport() {
+        if (stackedCats.length === 0) {
+          return { x: BASE.x, y: BASE.y, w: BASE.w };
+        }
+        const top = stackedCats[stackedCats.length - 1];
+        return { x: top.x, y: top.y, w: CAT_W };
+      }
+
+      function action() {
+        if (state === STATE.TITLE) {
+          startGame();
+          return;
+        }
+
+        if (state === STATE.GAMEOVER) {
+          startGame();
+          return;
+        }
+
+        if (state === STATE.PLAYING && activeCat && activeCat.mode === "moving" && !diveCat) {
+          activeCat.mode = "falling";
+          activeCat.vy = 8 + Math.min(score * 0.08, 3.2);
+        }
+      }
+
+      function onKeyDown(e) {
+        if (e.code === "Space" && !e.repeat) {
+          e.preventDefault();
+          action();
+        }
+      }
+
+      function onPointer(e) {
+        e.preventDefault();
+        action();
+      }
+
+      window.addEventListener("keydown", onKeyDown, { passive: false });
+      canvas.addEventListener("pointerdown", onPointer, { passive: false });
+
+      function update(dt) {
+        if (state !== STATE.PLAYING) return;
+        const f = dt * 60;
+
+        if (diveCat) {
+          diveCat.x += diveCat.vx * f;
+          diveCat.y += diveCat.vy * f;
+          diveCat.vy += 0.33 * f;
+          diveCat.rot += diveCat.vr * f;
+          diveCat.life -= dt;
+
+          if (diveCat.life <= 0 || diveCat.y > H + 120 || diveCat.x < -180 || diveCat.x > W + 180) {
+            diveCat = null;
+            activeCat = null;
+            state = STATE.GAMEOVER;
+          }
+          return;
+        }
+
+        if (!activeCat) return;
+
+        if (activeCat.mode === "moving") {
+          activeCat.x += activeCat.vx * f;
+
+          const half = CAT_W / 2;
+          if (activeCat.x < half) {
+            activeCat.x = half;
+            activeCat.vx *= -1;
+          } else if (activeCat.x > W - half) {
+            activeCat.x = W - half;
+            activeCat.vx *= -1;
+          }
+        } else if (activeCat.mode === "falling") {
+          activeCat.y += activeCat.vy * f;
+
+          const support = topSupport();
+          const landingY = support.y - CAT_H;
+
+          if (activeCat.y >= landingY) {
+            activeCat.y = landingY;
+
+            const curL = activeCat.x - CAT_W / 2;
+            const curR = activeCat.x + CAT_W / 2;
+            const supL = support.x - support.w / 2;
+            const supR = support.x + support.w / 2;
+
+            const overlap = Math.min(curR, supR) - Math.max(curL, supL);
+            const leftOverhang = Math.max(0, supL - curL);
+            const rightOverhang = Math.max(0, curR - supR);
+            const overhang = Math.max(leftOverhang, rightOverhang);
+
+            const centerLooseInRange =
+              activeCat.x > (support.x - CAT_W) &&
+              activeCat.x < (support.x + CAT_W);
+
+            const failByNoOverlap = overlap <= 0;
+            const failByHalfOrMore = overhang >= CAT_W / 2;
+            const success = centerLooseInRange && !failByNoOverlap && !failByHalfOrMore;
+
+            if (success) {
+              stackedCats.push({ x: activeCat.x, y: landingY });
+              score += 1;
+              spawnActiveCat();
+            } else {
+              const dir = activeCat.x < support.x ? -1 : 1;
+              diveCat = {
+                x: activeCat.x,
+                y: activeCat.y,
+                vx: dir * (8 + Math.random() * 4),
+                vy: -8 - Math.random() * 2.5,
+                rot: 0,
+                vr: dir * (0.24 + Math.random() * 0.2),
+                life: 1.0
+              };
+            }
+          }
+        }
+      }
+
+      function drawBackground(t) {
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, "#09142c");
+        grad.addColorStop(0.52, "#050b17");
+        grad.addColorStop(1, "#020207");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+
+        for (const s of stars) {
+          s.t += s.s;
+          const tw = 0.65 + Math.sin(t * 0.004 + s.t) * 0.35;
+          ctx.globalAlpha = Math.max(0.15, s.a * tw);
+          ctx.fillStyle = "#dff1ff";
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        const haze = ctx.createRadialGradient(W * 0.5, H * 0.82, 20, W * 0.5, H * 0.82, 240);
+        haze.addColorStop(0, "rgba(145,191,255,0.16)");
+        haze.addColorStop(1, "rgba(145,191,255,0)");
+        ctx.fillStyle = haze;
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      function drawBase() {
+        ctx.fillStyle = "#3b4b6e";
+        roundedRect(ctx, BASE.x - BASE.w / 2, BASE.y, BASE.w, BASE.h, 8);
+        ctx.fill();
+
+        ctx.fillStyle = "#5b7099";
+        roundedRect(ctx, BASE.x - BASE.w / 2, BASE.y, BASE.w, 10, 8);
+        ctx.fill();
+      }
+
+      function drawCat(x, y, options = {}) {
+        const body = options.body || "#ffd452";
+        const ear = options.ear || "#ffbd35";
+        const eye = options.eye || "#17253d";
+        const blush = options.blush || "#ff8fa9";
+
+        ctx.save();
+        if (options.rotation) {
+          ctx.translate(x, y);
+          ctx.rotate(options.rotation);
+          ctx.translate(-x, -y);
+        }
+
+        const left = x - CAT_W / 2;
+        const top = y;
+
+        ctx.fillStyle = body;
+        roundedRect(ctx, left, top + 8, CAT_W, CAT_H - 8, 10);
+        ctx.fill();
+
+        ctx.fillStyle = ear;
+        tri(ctx, left + 10, top + 10, left + 22, top - 8, left + 32, top + 10);
+        tri(ctx, left + CAT_W - 10, top + 10, left + CAT_W - 22, top - 8, left + CAT_W - 32, top + 10);
+
+        ctx.fillStyle = eye;
+        ctx.beginPath();
+        ctx.arc(left + 24, top + 24, 3.1, 0, Math.PI * 2);
+        ctx.arc(left + CAT_W - 24, top + 24, 3.1, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#ff6f86";
+        tri(ctx, x, top + 28, x - 3.5, top + 32, x + 3.5, top + 32);
+        ctx.strokeStyle = eye;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, top + 32);
+        ctx.lineTo(x - 5, top + 36);
+        ctx.moveTo(x, top + 32);
+        ctx.lineTo(x + 5, top + 36);
+        ctx.stroke();
+
+        ctx.strokeStyle = eye;
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(left + 14, top + 30);
+        ctx.lineTo(left + 4, top + 27);
+        ctx.moveTo(left + 14, top + 33);
+        ctx.lineTo(left + 3, top + 34);
+        ctx.moveTo(left + CAT_W - 14, top + 30);
+        ctx.lineTo(left + CAT_W - 4, top + 27);
+        ctx.moveTo(left + CAT_W - 14, top + 33);
+        ctx.lineTo(left + CAT_W - 3, top + 34);
+        ctx.stroke();
+
+        ctx.fillStyle = blush;
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath();
+        ctx.arc(left + 14, top + 31, 3.8, 0, Math.PI * 2);
+        ctx.arc(left + CAT_W - 14, top + 31, 3.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.restore();
+      }
+
+      function drawStack() {
+        drawBase();
+        for (let i = 0; i < stackedCats.length; i++) {
+          const c = stackedCats[i];
+          const hueShift = (i * 7) % 26;
+          const body = `hsl(${44 + hueShift}, 94%, 64%)`;
+          const ear = `hsl(${39 + hueShift}, 92%, 57%)`;
+          drawCat(c.x, c.y, { body, ear });
+        }
+      }
+
+      function drawUI() {
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+
+        ctx.font = "bold 46px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#f7fbff";
+        ctx.fillText(String(score), W / 2, 14);
+
+        ctx.font = "bold 16px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#9dc0f2";
+        ctx.fillText("SCORE", W / 2, 64);
+      }
+
+      function drawTitle() {
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#f7fbff";
+
+        ctx.font = "bold 26px Trebuchet MS, sans-serif";
+        ctx.fillText("ニャンコ・ダイブ！", W / 2, 194);
+
+        ctx.font = "bold 17px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#c6dbff";
+        ctx.fillText("～全宇宙ネコ積み上げ計画～", W / 2, 230);
+
+        ctx.font = "bold 20px Trebuchet MS, sans-serif";
+        const pulse = 0.55 + Math.sin(performance.now() * 0.008) * 0.45;
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = "#ffd452";
+        ctx.fillText("タップしてスタート", W / 2, 306);
+        ctx.globalAlpha = 1;
+
+        ctx.font = "14px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#aac4e7";
+        ctx.fillText("クリック / Space でもOK", W / 2, 336);
+
+        drawCat(W / 2, 374, {
+          body: "#ffe07a",
+          ear: "#ffc145",
+          blush: "#ff8aa6"
+        });
+      }
+
+      function drawGameOver() {
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        ctx.font = "bold 52px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#ff6a88";
+        ctx.fillText("GAME OVER", W / 2, H * 0.4);
+
+        ctx.font = "bold 22px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#fff3f7";
+        ctx.fillText(`SCORE: ${score}`, W / 2, H * 0.5);
+
+        const pulse = 0.5 + Math.sin(performance.now() * 0.01) * 0.5;
+        ctx.globalAlpha = pulse;
+        ctx.font = "bold 18px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#ffd452";
+        ctx.fillText("タップで即リトライ", W / 2, H * 0.58);
+        ctx.globalAlpha = 1;
+      }
+
+      function roundedRect(ctx2, x, y, w, h, r) {
+        const rr = Math.min(r, w / 2, h / 2);
+        ctx2.beginPath();
+        ctx2.moveTo(x + rr, y);
+        ctx2.arcTo(x + w, y, x + w, y + h, rr);
+        ctx2.arcTo(x + w, y + h, x, y + h, rr);
+        ctx2.arcTo(x, y + h, x, y, rr);
+        ctx2.arcTo(x, y, x + w, y, rr);
+        ctx2.closePath();
+      }
+
+      function tri(ctx2, x1, y1, x2, y2, x3, y3) {
+        ctx2.beginPath();
+        ctx2.moveTo(x1, y1);
+        ctx2.lineTo(x2, y2);
+        ctx2.lineTo(x3, y3);
+        ctx2.closePath();
+        ctx2.fill();
+      }
+
+      function render(t) {
+        drawBackground(t);
+        drawStack();
+        drawUI();
+
+        if (state === STATE.PLAYING) {
+          if (activeCat) {
+            drawCat(activeCat.x, activeCat.y);
+          }
+          if (diveCat) {
+            drawCat(diveCat.x, diveCat.y, {
+              body: "#ff9a57",
+              ear: "#ff7e3f",
+              blush: "#ff5d75",
+              rotation: diveCat.rot
+            });
+          }
+        } else if (state === STATE.TITLE) {
+          drawTitle();
+        } else if (state === STATE.GAMEOVER) {
+          drawGameOver();
+        }
+      }
+
+      function tick(t) {
+        if (!lastTime) lastTime = t;
+        const dt = Math.min((t - lastTime) / 1000, 0.05);
+        lastTime = t;
+        update(dt);
+        render(t);
+        requestAnimationFrame(tick);
+      }
+
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>
