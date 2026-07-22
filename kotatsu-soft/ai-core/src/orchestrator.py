@@ -691,6 +691,7 @@ class ProposalSelectView(discord.ui.View):
             spec_path = await self.pm_agent.generate_spec_for_plan(
                 selected_plan=plan_label,
                 proposal_summary=self.final_recommendation,
+                theme=self.theme,
             )
             await interaction.followup.send(
                 f"📄 仕様書を出力・保存しました: `{spec_path}`"

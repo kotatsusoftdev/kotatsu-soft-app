@@ -601,7 +601,7 @@
               <span class="pill play-count play-count-mikan" data-stat-id="mikan" aria-live="polite">🎮 -回プレイ</span>
               <a class="action-btn play" data-game-id="mikan_buster" href="./001_mikan_buster/src/index.html">Play</a>
               <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
-              <a class="action-btn spec-link" href="../shared/specs/spec_20260720_112402.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
+              <a class="action-btn spec-link" data-game-id="mikan_buster" href="../shared/specs/spec_20260720_112402.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
             </div>
           </div>
         </article>
@@ -616,7 +616,7 @@
               <span class="pill play-count play-count-nyanko" data-stat-id="nyanko" aria-live="polite">🎮 -回プレイ</span>
               <a class="action-btn play" data-game-id="nyanko_dive" href="./002_nyanko_dive/src/index.html">Play</a>
               <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
-              <a class="action-btn spec-link" href="../shared/specs/spec_ゲーム開発___ブラウザミニゲーム_20260722_125043.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
+              <a class="action-btn spec-link" data-game-id="nyanko_dive" href="../shared/specs/spec_ゲーム開発___ブラウザミニゲーム_20260722_125043.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
             </div>
           </div>
         </article>
@@ -640,10 +640,12 @@
 
   <script>
     const API_BASE_URL = "https://kotatsu-soft-stats.kotatsusoft-dev.workers.dev";
+    const SPEC_REGISTRY_PATH = "../shared/specs/spec_game_links.json";
 
     const totalPlayEl = document.getElementById("totalPlayCount");
     const portalPvEl = document.querySelector(".global-pv");
     const playCountEls = Array.from(document.querySelectorAll(".play-count"));
+    const specLinkEls = Array.from(document.querySelectorAll(".spec-link[data-game-id]"));
 
     function formatCount(value) {
       const num = Number(value);
@@ -708,6 +710,66 @@
       }
     }
 
+    async function fetchSpecRegistry() {
+      try {
+        const response = await fetch(SPEC_REGISTRY_PATH, {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            accept: "application/json",
+          },
+        });
+        if (!response.ok) return null;
+        return response.json();
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    function applySpecRegistry(payload) {
+      if (!payload || typeof payload !== "object") return;
+
+      const records = Array.isArray(payload.records) ? payload.records : [];
+      if (!records.length) return;
+
+      const sorted = records
+        .filter((record) => record && typeof record === "object")
+        .sort((a, b) => {
+          const left = String(a.created_at || "");
+          const right = String(b.created_at || "");
+          return right.localeCompare(left);
+        });
+
+      const latestByGameId = new Map();
+
+      for (const record of sorted) {
+        const linkedGames = Array.isArray(record.linked_games) ? record.linked_games : [];
+        for (const game of linkedGames) {
+          if (!game || typeof game !== "object") continue;
+          const gameId = typeof game.game_id === "string" ? game.game_id : "";
+          if (!gameId || latestByGameId.has(gameId)) continue;
+          latestByGameId.set(gameId, record);
+        }
+      }
+
+      for (const linkEl of specLinkEls) {
+        const gameId = linkEl.dataset.gameId;
+        if (!gameId) continue;
+
+        const latest = latestByGameId.get(gameId);
+        if (!latest || typeof latest.spec_file !== "string") continue;
+
+        const specFile = latest.spec_file.trim();
+        if (!specFile) continue;
+
+        linkEl.href = `../shared/specs/${encodeURIComponent(specFile)}`;
+        const selectedPlan = typeof latest.selected_plan === "string" ? latest.selected_plan.trim() : "";
+        if (selectedPlan) {
+          linkEl.title = `最新仕様書: ${selectedPlan}`;
+        }
+      }
+    }
+
     function applyStats(data) {
       if (!data || typeof data !== "object") return;
 
@@ -744,16 +806,24 @@
       }
     }
 
-    async function bootstrapStats() {
+    async function bootstrapPortal() {
       // Requirement order: increment PV first, then fetch latest counters.
       await postCount("pv");
-      const stats = await fetchStats();
+      const [stats, specRegistry] = await Promise.all([
+        fetchStats(),
+        fetchSpecRegistry(),
+      ]);
+
       if (stats) {
         applyStats(stats);
       }
+
+      if (specRegistry) {
+        applySpecRegistry(specRegistry);
+      }
     }
 
-    void bootstrapStats();
+    void bootstrapPortal();
   </script>
 </body>
 </html>

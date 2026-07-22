@@ -7,6 +7,7 @@ from google.genai import types
 
 from agents.base_agent import BaseAgent
 from agents.pm.schemas import PMDecision
+from spec_link_registry import register_generated_spec
 
 
 class PMAgent(BaseAgent):
@@ -413,6 +414,7 @@ class PMAgent(BaseAgent):
         self,
         selected_plan: str,
         proposal_summary: str,
+        theme: Optional[str] = None,
     ) -> Path:
         instruction = (
             "あなたはPMエージェントです。採用された案の概要を受け取り、"
@@ -449,4 +451,10 @@ class PMAgent(BaseAgent):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         spec_file = specs_dir / f"spec_{safe_plan_name}_{timestamp}.md"
         spec_file.write_text(spec_text, encoding="utf-8")
+        register_generated_spec(
+            spec_file=spec_file,
+            selected_plan=selected_plan,
+            proposal_summary=proposal_summary,
+            theme=theme,
+        )
         return spec_file
