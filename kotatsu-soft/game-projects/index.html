@@ -88,6 +88,12 @@
       flex-wrap: wrap;
     }
 
+    .brand-copy {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
     .logo {
       letter-spacing: 0.22em;
       font-weight: 800;
@@ -102,6 +108,38 @@
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: #ffe8cc;
+    }
+
+    .youtube-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      align-self: start;
+      text-decoration: none;
+      color: #fff9f0;
+      background: linear-gradient(90deg, #c63a31, #f06d36);
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 0.86rem;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      box-shadow: 0 10px 22px rgba(94, 31, 12, 0.24);
+      transition: transform 160ms ease, filter 160ms ease, box-shadow 160ms ease;
+      white-space: nowrap;
+    }
+
+    .youtube-cta:hover,
+    .youtube-cta:focus-visible {
+      transform: translateY(-1px);
+      filter: brightness(1.05);
+      box-shadow: 0 12px 26px rgba(94, 31, 12, 0.3);
+    }
+
+    .youtube-cta::before {
+      content: "▶";
+      font-size: 0.82rem;
+      line-height: 1;
     }
 
     .hero {
@@ -152,6 +190,38 @@
       color: #4a3729;
       font-size: 0.92rem;
       line-height: 1.55;
+    }
+
+    .global-stats {
+      margin: 4px clamp(16px, 4vw, 40px) 14px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .global-stat {
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: linear-gradient(180deg, rgba(255, 252, 246, 0.94), rgba(255, 237, 213, 0.88));
+      box-shadow: 0 8px 18px rgba(88, 53, 21, 0.08);
+      display: grid;
+      gap: 4px;
+    }
+
+    .global-stat .label {
+      margin: 0;
+      font-size: 0.82rem;
+      color: #6f5849;
+      letter-spacing: 0.03em;
+    }
+
+    .global-stat .value {
+      margin: 0;
+      font-size: clamp(1rem, 2.3vw, 1.2rem);
+      font-weight: 800;
+      color: #7d2f14;
+      letter-spacing: 0.02em;
     }
 
     main {
@@ -242,12 +312,23 @@
       line-height: 1.55;
     }
 
+    .card-footer {
+      display: grid;
+      gap: 10px;
+    }
+
     .actions {
       margin-top: 6px;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
+      align-items: stretch;
+      justify-content: flex-start;
       gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .actions .pill {
+      flex: 0 0 100%;
+      justify-content: flex-start;
     }
 
     .pill {
@@ -264,23 +345,102 @@
       padding: 6px 10px;
     }
 
-    .play {
+    .play-count {
+      color: #7b3119;
+      background: linear-gradient(180deg, #ffe4c5, #ffd5ad);
+      border-color: rgba(151, 74, 36, 0.3);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
+      font-weight: 800;
+    }
+
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       text-decoration: none;
-      color: #fff;
-      background: linear-gradient(90deg, #bf2f2f, #cf5632);
       border-radius: 11px;
       padding: 8px 12px;
       font-size: 0.9rem;
       font-weight: 800;
       letter-spacing: 0.04em;
-      border: 1px solid rgba(255, 255, 255, 0.28);
-      transition: filter 160ms ease, transform 160ms ease;
+      border: 1px solid transparent;
+      transition: filter 160ms ease, transform 160ms ease, background 160ms ease, border-color 160ms ease;
+      white-space: nowrap;
+      flex: 1 1 120px;
+    }
+
+    .play {
+      color: #fff;
+      background: linear-gradient(90deg, #bf2f2f, #cf5632);
+      border-color: rgba(255, 255, 255, 0.28);
     }
 
     .play:hover,
     .play:focus-visible {
       filter: brightness(1.08);
       transform: translateY(-1px);
+    }
+
+    .youtube-link {
+      color: #6b361d;
+      background: linear-gradient(180deg, #fff8ef, #ffe8c9);
+      border-color: rgba(123, 47, 18, 0.18);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
+
+    .youtube-link:hover,
+    .youtube-link:focus-visible {
+      filter: brightness(1.03);
+      transform: translateY(-1px);
+      border-color: rgba(191, 47, 47, 0.35);
+    }
+
+    .spec-link {
+      color: #5a4638;
+      background: linear-gradient(180deg, #fdf5e9, #f4e4cb);
+      border-color: rgba(111, 83, 62, 0.24);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    }
+
+    .spec-link::before {
+      content: "📝";
+      margin-right: 6px;
+      line-height: 1;
+      font-size: 0.92rem;
+    }
+
+    .spec-link:hover,
+    .spec-link:focus-visible {
+      filter: brightness(1.03);
+      transform: translateY(-1px);
+      border-color: rgba(123, 47, 18, 0.32);
+    }
+
+    .ad-container {
+      margin-top: 20px;
+      display: grid;
+      place-items: center;
+      min-height: 110px;
+      padding: 18px;
+      border-radius: 18px;
+      border: 1px dashed rgba(127, 74, 46, 0.28);
+      background: linear-gradient(180deg, rgba(255, 248, 240, 0.86), rgba(255, 236, 212, 0.92));
+      color: #7a5d4e;
+      text-align: center;
+      box-shadow: 0 10px 26px rgba(88, 53, 21, 0.08);
+    }
+
+    .ad-container strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #8f421b;
+      letter-spacing: 0.04em;
+    }
+
+    .ad-container p {
+      margin: 0;
+      font-size: 0.9rem;
+      line-height: 1.55;
     }
 
     .studio {
@@ -338,6 +498,15 @@
     }
 
     @media (max-width: 900px) {
+      .brand-row {
+        align-items: flex-start;
+      }
+
+      .youtube-cta {
+        width: 100%;
+        justify-content: center;
+      }
+
       .hero {
         grid-template-columns: 1fr;
         align-items: start;
@@ -350,6 +519,24 @@
       .game-grid {
         grid-template-columns: 1fr;
       }
+
+      .global-stats {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .global-stat .value {
+        font-size: 1.02rem;
+      }
+
+      .actions {
+        gap: 6px;
+      }
+
+      .action-btn {
+        flex-basis: 112px;
+      }
     }
   </style>
 </head>
@@ -359,17 +546,21 @@
   <div class="scene">
     <header>
       <div class="brand-row">
-        <p class="logo">KOTATSU SOFT</p>
-        <p class="tag">Warm, Tiny, Playful Web Games</p>
+        <div class="brand-copy">
+          <p class="logo">KOTATSU SOFT</p>
+          <p class="tag">素人社長とAI社員がつくる、あたたかいインディーズゲームスタジオ</p>
+        </div>
+        <a class="youtube-cta" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">YouTubeを見る</a>
       </div>
     </header>
 
     <section class="hero">
       <div class="fade-up">
-        <h1>コタツの上で、<br />すぐ遊べるミニゲーム。</h1>
+        <h1>素人社長とAI社員が、<br />毎日コタツでゲームを育てています。</h1>
         <p>
-          KOTATSU SOFT は、短時間で熱中できるブラウザゲームを制作する小さなスタジオです。
-          クリックやタップだけで、だれでも今すぐ遊べます。
+          KOTATSU SOFT は、素人社長のひらめきと AI 社員の実装力を掛け合わせて、
+          休憩時間にちょうどいいインディーズブラウザゲームを届ける小さな開発スタジオです。
+          クリックやタップだけで、今すぐ遊べる作品をそろえています。
         </p>
       </div>
       <aside class="hero-note fade-up">
@@ -380,6 +571,17 @@
           プレイ時間はどちらも 1 分以内。休憩時間にどうぞ。
         </p>
       </aside>
+    </section>
+
+    <section class="global-stats" aria-label="ポータル全体実績">
+      <article class="global-stat fade-up">
+        <p class="label">🎯 累計ゲームプレイ数</p>
+        <p class="value global-total-play" id="totalPlayCount" data-default-count="12450" aria-live="polite">12,450 回</p>
+      </article>
+      <article class="global-stat fade-up">
+        <p class="label">👀 ポータル総PV</p>
+        <p class="value global-pv" id="portalPvCount" data-default-count="45200" aria-live="polite">45,200 PV</p>
+      </article>
     </section>
 
     <main>
@@ -393,9 +595,14 @@
           <div class="thumb mikan" aria-hidden="true">MIKAN BUSTER</div>
           <h3>10秒コタツミカンバスター</h3>
           <p>ミカンを撃ってコタツを防衛。短時間でスコアを伸ばすシューティング。</p>
-          <div class="actions">
-            <span class="pill">Shooter / 10 sec</span>
-            <a class="play" href="./001_mikan_buster/src/index.html">Play</a>
+          <div class="card-footer">
+            <div class="actions">
+              <span class="pill">Shooter / 10 sec</span>
+              <span class="pill play-count play-count-mikan" data-stat-id="mikan" data-default-count="8320" aria-live="polite">🎮 8,320回プレイ</span>
+              <a class="action-btn play" data-game-id="mikan_buster" href="./001_mikan_buster/src/index.html">Play</a>
+              <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
+              <a class="action-btn spec-link" href="../shared/specs/spec_20260720_112402.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
+            </div>
           </div>
         </article>
 
@@ -403,11 +610,21 @@
           <div class="thumb nyanko" aria-hidden="true">NYANKO DIVE</div>
           <h3>ニャンコ・ダイブ！</h3>
           <p>ネコを積み上げるワンアクションバランスゲーム。ズレたら宇宙へダイブ。</p>
-          <div class="actions">
-            <span class="pill">Stack Action</span>
-            <a class="play" href="./002_nyanko_dive/src/index.html">Play</a>
+          <div class="card-footer">
+            <div class="actions">
+              <span class="pill">Stack Action</span>
+              <span class="pill play-count play-count-nyanko" data-stat-id="nyanko" data-default-count="4130" aria-live="polite">🎮 4,130回プレイ</span>
+              <a class="action-btn play" data-game-id="nyanko_dive" href="./002_nyanko_dive/src/index.html">Play</a>
+              <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
+              <a class="action-btn spec-link" href="../shared/specs/spec_ゲーム開発___ブラウザミニゲーム_20260722_125043.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
+            </div>
           </div>
         </article>
+      </div>
+
+      <div class="ad-container" aria-label="広告エリア">
+        <strong>スポンサーリンク / 広告エリア</strong>
+        <p>ここに AdSense などのレスポンシブ広告を設置予定です。現在は開発中のプレースホルダーです。</p>
       </div>
 
       <section class="studio">
@@ -420,5 +637,144 @@
       Copyright 2026 KOTATSU SOFT. All rights reserved.
     </footer>
   </div>
+
+  <script>
+    const API_BASE_URL = "https://kotatsu-soft-stats.kotatsusoft-dev.workers.dev";
+
+    const totalPlayEl = document.getElementById("totalPlayCount");
+    const portalPvEl = document.querySelector(".global-pv");
+    const playCountEls = Array.from(document.querySelectorAll(".play-count"));
+
+    function formatCount(value) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return null;
+      return new Intl.NumberFormat("ja-JP").format(Math.max(0, Math.trunc(num)));
+    }
+
+    function normalizeCount(value) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return null;
+      return Math.max(0, Math.trunc(num));
+    }
+
+    function parseCountFromText(text) {
+      const digits = (text || "").replace(/[^\d]/g, "");
+      if (!digits) return null;
+      return normalizeCount(Number(digits));
+    }
+
+    function readDefaultCount(el) {
+      if (!el) return null;
+      const byData = normalizeCount(el.dataset.defaultCount);
+      if (byData !== null) return byData;
+      return parseCountFromText(el.textContent);
+    }
+
+    function setGlobalPv(value) {
+      const count = normalizeCount(value);
+      if (!portalPvEl || count === null) return;
+      portalPvEl.textContent = `${formatCount(count)} PV`;
+    }
+
+    function setTotalPlay(value) {
+      const count = normalizeCount(value);
+      if (!totalPlayEl || count === null) return;
+      totalPlayEl.textContent = `${formatCount(count)} 回`;
+    }
+
+    function setGamePlay(el, value) {
+      const count = normalizeCount(value);
+      if (!el || count === null) return;
+      el.textContent = `🎮 ${formatCount(count)}回プレイ`;
+    }
+
+    function getBadgeStatId(el) {
+      if (!el) return null;
+      return el.dataset.statId || el.dataset.gameId || null;
+    }
+
+    function getDefaultBadgeCount(el) {
+      if (!el) return 0;
+      const fromData = normalizeCount(el.dataset.defaultCount);
+      if (fromData !== null) return fromData;
+      return parseCountFromText(el.textContent) ?? 0;
+    }
+
+    async function postCount(id) {
+      try {
+        await fetch(`${API_BASE_URL}?id=${encodeURIComponent(id)}`, {
+          method: "POST",
+          keepalive: true,
+          cache: "no-store",
+        });
+      } catch (_error) {
+        // Keep existing display as fallback when API is unavailable.
+      }
+    }
+
+    async function fetchStats() {
+      try {
+        const response = await fetch(API_BASE_URL, {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            accept: "application/json",
+          },
+        });
+        if (!response.ok) return null;
+        return response.json();
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    function applyStats(data) {
+      if (!data || typeof data !== "object") return;
+
+      const pv = normalizeCount(data.pv);
+      if (pv !== null) {
+        setGlobalPv(pv);
+      }
+
+      let totalPlays = 0;
+      let hasAnyPlayValue = false;
+
+      for (const el of playCountEls) {
+        const statId = getBadgeStatId(el);
+        if (!statId) continue;
+
+        const fromApi = normalizeCount(data[statId]);
+        if (fromApi !== null) {
+          setGamePlay(el, fromApi);
+          totalPlays += fromApi;
+          hasAnyPlayValue = true;
+          continue;
+        }
+
+        totalPlays += getDefaultBadgeCount(el);
+      }
+
+      if (!hasAnyPlayValue) {
+        const explicitTotal = normalizeCount(data.totalPlay ?? data.totalPlays);
+        if (explicitTotal !== null) {
+          setTotalPlay(explicitTotal);
+          return;
+        }
+      }
+
+      setTotalPlay(totalPlays);
+    }
+
+    async function bootstrapStats() {
+      // Requirement order: increment PV first, then fetch latest counters.
+      await postCount("pv");
+      const stats = await fetchStats();
+      if (stats) {
+        applyStats(stats);
+      }
+    }
+
+    void bootstrapStats();
+  </script>
 </body>
 </html>

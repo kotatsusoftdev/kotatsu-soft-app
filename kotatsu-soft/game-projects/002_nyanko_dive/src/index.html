@@ -106,6 +106,7 @@
     <div class="hint">PC: クリック / Space ・ スマホ: タップ</div>
   </div>
 
+  <script src="../../common/stats.js"></script>
   <script>
     (() => {
       "use strict";
@@ -138,6 +139,7 @@
       let activeCat = null;
       let diveCat = null;
       let lastTime = 0;
+      const sendPlayCount = window.KotatsuStats && window.KotatsuStats.sendPlayCount;
 
       const stars = createStars(72);
 
@@ -164,6 +166,9 @@
       }
 
       function startGame() {
+        try {
+          if (typeof sendPlayCount === "function") sendPlayCount("nyanko");
+        } catch (_error) {}
         resetGame();
         state = STATE.PLAYING;
       }

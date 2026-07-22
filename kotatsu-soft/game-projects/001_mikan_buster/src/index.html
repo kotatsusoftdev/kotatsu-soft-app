@@ -43,6 +43,7 @@
     </div>
   </div>
 
+  <script src="../../common/stats.js"></script>
   <script>
     // --- 簡易設定 ---
     const WIDTH = 375, HEIGHT = 667
@@ -56,6 +57,7 @@
     const retryBtn = document.getElementById('retryBtn')
     const finalScore = document.getElementById('finalScore')
     const titleAward = document.getElementById('titleAward')
+    const sendPlayCount = window.KotatsuStats && window.KotatsuStats.sendPlayCount
 
     // --- 音 ---
     let audioCtx
@@ -233,6 +235,7 @@
 
     // --- 入力 ---
     function startGame(){
+      try{ if(typeof sendPlayCount === 'function') sendPlayCount('mikan') }catch(e){}
       score = 0; projectiles=[]; enemies=[]; particles=[]
       state='Playing'; titleScreen.style.display='none'; resultScreen.style.display='none'
       startTime = Date.now(); lastSpawn = Date.now(); last = Date.now()
