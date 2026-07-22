@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import sys
@@ -8,7 +9,7 @@ import discord
 from discord.ext import commands
 
 from config import ConfigError, Config, get_config
-from orchestrator import DynamicOrchestrator, ProposalSelectView
+from orchestrator import DynamicOrchestrator, ProposalSelectView, build_president_final_message
 from agents.dev.agent import DevAgent
 from agents.marketing.agent import MarketingAgent
 from agents.pm.agent import PMAgent
@@ -30,6 +31,9 @@ _config: Optional[Config] = None
 
 _PERSISTENT_VIEW_STORE_PATH = (
     Path(__file__).resolve().parents[2] / "shared" / "logs" / "proposal_views.json"
+)
+_MEETING_TURN_AUDIT_PATH = (
+    Path(__file__).resolve().parents[2] / "shared" / "logs" / "meeting_turn_audit.jsonl"
 )
 
 
@@ -77,6 +81,41 @@ def _register_persistent_view_record(record: dict) -> None:
     records = [r for r in _load_persistent_view_records() if r.get("message_id") != record.get("message_id")]
     records.append(record)
     _save_persistent_view_records(records)
+
+
+def _append_meeting_turn_audit_record(
+    *,
+    channel_id: int,
+    theme: str,
+    revision_guidance: Optional[str],
+    trace: list[dict],
+    history: list[str],
+    final_decision: Optional[object],
+) -> None:
+    if not trace:
+        return
+
+    violations: list[str] = []
+    if any(item.get("next_action_initial") == "FINISH_FOR_PRESIDENT" and item.get("turn", 0) <= 5 for item in trace):
+        violations.append("early_finish_attempt_before_turn6")
+    if any(item.get("pm_phase_final") != item.get("expected_phase") for item in trace):
+        violations.append("phase_mismatch_after_guardrail")
+
+    record = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "channel_id": channel_id,
+        "theme": theme,
+        "revision_guidance": revision_guidance,
+        "turn_count": len(trace),
+        "history_length": len(history),
+        "has_final_decision": final_decision is not None,
+        "violations": violations,
+        "trace": trace,
+    }
+
+    _MEETING_TURN_AUDIT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with _MEETING_TURN_AUDIT_PATH.open("a", encoding="utf-8") as fp:
+        fp.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 async def _restore_persistent_views() -> None:
@@ -190,28 +229,35 @@ async def run_meeting_round(
         meeting_channel,
         revision_guidance=revision_guidance,
     )
-    history_text = "\n".join(history[-10:]) if history else "議論ログはありません。"
-
-    final_recommendation = (
-        final_decision.final_recommendation if final_decision and final_decision.final_recommendation else ""
-    )
-    final_category = (
-        final_decision.final_category if final_decision and final_decision.final_category else "未定"
-    )
-    revision_guidance_text = (
-        final_decision.revision_guidance
-        if final_decision and final_decision.revision_guidance
-        else "改善の方向性を明確にして、再度検討してください。"
+    _append_meeting_turn_audit_record(
+        channel_id=meeting_channel.id,
+        theme=theme,
+        revision_guidance=revision_guidance,
+        trace=orchestrator.last_meeting_trace,
+        history=history,
+        final_decision=final_decision,
     )
 
-    summary = (
-        f"{cfg.PRESIDENT_MENTION} 会議が完了しました。\n"
-        f"PM最終発言:\n{final_pm_speech}\n\n"
-        "── 推奨1案 ──\n"
-        f"{final_category}:\n{final_recommendation}\n\n"
-        "── 直近の議論履歴 ──\n"
-        f"{history_text}"
-    )
+    if final_decision is None:
+        summary = (
+            f"{cfg.PRESIDENT_MENTION} 最終提案を提示しますね！\n\n"
+            "**【社長への最終提案】**\n"
+            "・**カテゴリ:** 未定\n"
+            "・**提案概要:** （提案内容が未設定です）\n"
+            "・**修正ガイドライン（NoGo時）:** 改善の方向性を明確にして、再度検討してください。"
+        )
+        final_recommendation = ""
+        final_category = "未定"
+        revision_guidance_text = "改善の方向性を明確にして、再度検討してください。"
+    else:
+        summary = build_president_final_message(cfg.PRESIDENT_MENTION, final_decision)
+
+        final_recommendation = (final_decision.final_recommendation or "").strip()
+        final_category = (final_decision.final_category or "未定").strip() or "未定"
+        revision_guidance_text = (
+            (final_decision.revision_guidance or "").strip()
+            or "改善の方向性を明確にして、再度検討してください。"
+        )
 
     def chunk_text(text: str, limit: int = 2000) -> list[str]:
         chunks: list[str] = []

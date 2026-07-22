@@ -1,7 +1,6 @@
 import asyncio
 from datetime import datetime
 from pathlib import Path
-import re
 from typing import Optional
 from google import genai
 from google.genai import types
@@ -11,8 +10,14 @@ from agents.pm.schemas import PMDecision
 
 
 class PMAgent(BaseAgent):
-    _DEADLINE_REMINDER_RE = re.compile(
-        r"^\s*(?:[-・*]\s*)?議論できるのはあと\s*\d+\s*回よ。そろそろ絞り込みましょう\s*\n*"
+    CALL_NAME_RULES = (
+        "【呼称ルール】\n"
+        "- 一人称は『私』を使う。\n"
+        "- ヂャイアン（マーケ）への呼び方は『ヂャイアン』で統一する。\n"
+        "- スゴ杉くん（エンジニア）への呼び方は『スゴ杉さん』で統一する。\n"
+        "- 社長（ユーザー）への呼び方は『のぶ太社長』または『のぶ太さん』を使う。\n"
+        "- メンバーに意見を振る・返答する際は、本文中やメンション（@呼び名）で自然に相手の名前を呼ぶ。\n"
+        "- 上記以外の呼び名（あだ名・省略名）は使わない。\n"
     )
 
     def __init__(self, api_key: str, config_path: str, mention_id: str):
@@ -28,7 +33,7 @@ class PMAgent(BaseAgent):
     def _phase_label(self, current_turn: int, max_turns: int) -> str:
         if current_turn <= 4:
             return "DIVERGENCE"
-        if current_turn <= 8:
+        if current_turn <= 7:
             return "CONFLICT"
         return "FINAL"
 
@@ -36,62 +41,55 @@ class PMAgent(BaseAgent):
         phase = self._phase_label(current_turn, max_turns)
         if phase == "DIVERGENCE":
             return (
-                "このフェーズでは、まずは発散を最優先してください。"
-                "注目軸は『新奇性』『笑い・シュールさ』『世界観の尖り』です。"
-                "案を広げる際は、単に数を増やすのではなく、どこが新しいのか、どこが笑えるのか、どこで世界観が立つのかを見極め、"
-                "足りない案には別角度の反証や追加視点を求めてください。"
+                "Turn 1〜4 の発散フェーズです。"
+                "この区間では合意・提出は禁止です。"
+                "毎ターン、既出案と明確に違う切り口の別案を最低1つ追加し、"
+                "必ずスゴ杉くん(エンジニア)にも実現可能性・実装負荷・技術ギミックの観点で問いを振ってください。"
             )
         if phase == "CONFLICT":
-            if 8 <= current_turn <= 9:
-                return (
-                    "【重要・終盤フェーズ】新しい大風呂敷を広げることを禁止します。"
-                    "この時点では、これまで出た案のどれを削るかに集中し、"
-                    "必ず二者択一で『どちらを捨てるか』を明言してください。"
-                    "追加アイデアの提案ではなく、残す要素と捨てる要素の最終調整だけを行ってください。"
-                )
             return (
-                "【重要・衝突フェーズ】このフェーズでは、PM自身が審判として鋭くツッコミを入れてください。"
-                "注目軸は『工数・バグリスク（デバッグ地獄）』と『表現の過激さ vs 動作の安定性』です。"
-                "マーケの大げさな案には、どこで壊れるか、どこが実装負債になるか、何を削れば成立するかを突き、"
-                "開発の安全すぎる案には、攻めの表現をどこまで許容できるか、何を残せば尖るかを問い、"
-                "トレードオフを明示しながら最も魅力的な1点へ絞り込んでください。"
+                "Turn 5〜7 の衝突フェーズです。"
+                "複数案が出揃っている前提で、初めて比較・衝突に入ります。"
+                "単に削るだけでなく、技術面(実装コスト/難易度)と集客面(拡散性/訴求)のトレードオフを明示してください。"
+                "何を優先し、何を諦めるかを自然な言葉で整理してください。"
             )
         return (
-            "この最終フェーズでは、比較のための雑な横並びではなく、"
-            "1案だけを推す形でまとめてください。"
-            "注目軸は『初見のインパクト』『SNS拡散性』『リトライのテンポ』です。"
-            "初見で何が刺さるのか、共有したくなる理由は何か、もう一回遊びたくなるテンポはあるかを中心に整理してください。"
-            "final_recommendation には社長向けの1案の要約を、"
-            "final_category にはその案のカテゴリ名を、"
-            "revision_guidance には NoGo のときに直すべき方向を入れてください。"
-            "最後に、社長に渡すために FINISH_FOR_PRESIDENT を返してください。"
+            "Turn 8〜10 の最終集約フェーズです。"
+            "比較を打ち切って1案に絞り、初見インパクト・拡散性・リトライしたくなるテンポを短く整理してください。"
+            "FINISH_FOR_PRESIDENT を返し、final_recommendation / final_category / revision_guidance を必ず埋めてください。"
         )
 
-    def _remaining_turns(self, current_turn: int, max_turns: int) -> int:
-        return max(max_turns - current_turn + 1, 0)
+    def _has_tradeoff_comparison(self, history: list[str]) -> bool:
+        if not history:
+            return False
 
-    def _deadline_reminder(self, current_turn: int, max_turns: int) -> str:
-        remaining = self._remaining_turns(current_turn, max_turns)
-        return f"議論できるのはあと{remaining}回よ。そろそろ絞り込みましょう"
-
-    def _strip_leading_deadline_reminders(self, text: Optional[str]) -> str:
-        cleaned = (text or "").lstrip()
-        while True:
-            match = self._DEADLINE_REMINDER_RE.match(cleaned)
-            if not match:
-                break
-            cleaned = cleaned[match.end():].lstrip()
-        return cleaned
-
-    def _prepend_deadline_if_needed(self, text: Optional[str], current_turn: int, max_turns: int) -> str:
-        body = self._strip_leading_deadline_reminders(text)
-        if current_turn < 5:
-            return body
-
-        reminder = self._deadline_reminder(current_turn, max_turns)
-        if not body:
-            return reminder
-        return f"{reminder}\n{body}"
+        recent_text = "\n".join(history[-10:])
+        strong_markers = (
+            "トレードオフ",
+            "比較",
+            "二者択一",
+            "案A",
+            "案B",
+            "メリット",
+            "デメリット",
+            "採用理由",
+            "不採用理由",
+            "優先順位",
+        )
+        decision_markers = (
+            "どちら",
+            "優先",
+            "残す",
+            "捨て",
+            "削る",
+            "諦め",
+            "採用",
+            "不採用",
+        )
+        has_strong = any(marker in recent_text for marker in strong_markers)
+        has_decision = any(marker in recent_text for marker in decision_markers)
+        has_explicit_two_options = "案A" in recent_text and "案B" in recent_text
+        return has_explicit_two_options or (has_strong and has_decision)
 
     def _latest_marketing_message(self, history: list[str]) -> str:
         for line in reversed(history):
@@ -122,39 +120,23 @@ class PMAgent(BaseAgent):
         )
         return any(marker in latest_marketing for marker in markers)
 
-    @staticmethod
-    def _hybrid_bridge_instruction(target_role: Optional[str], current_turn: int) -> str:
-        base = (
-            "今回は単なる却下や二者択一だけで終わらせず、"
-            "ヂャイアンのバカバカしい世界観をスゴ杉くんの『図形とテキストだけの最速レシピ』で成立させる"
-            "ハイブリッド案を必ず1つ入れてください。"
-            "派手なアセット追加ではなく、軽量な実装トリックでシュールさを増幅する前提で考えてください。"
-        )
-        if target_role == "marketing":
-            role_specific = (
-                "マーケ視点では、チープな画面だからこそ刺さる巨大ワード、理不尽な見せ方、"
-                "SNSで切り取りたくなる一瞬を定義し、エンジニアが即実装できる粒度に落としてください。"
-            )
-        elif target_role == "dev":
-            role_specific = (
-                "開発視点では、Canvasの文字ポップアップ、一定フレームごとの点滅、単純な図形移動のような"
-                "軽量トリックを最低1つ示し、その世界観をどう最速で再現するか具体化してください。"
-            )
-        else:
-            role_specific = (
-                "世界観の尖りと実装の軽さを両立させるため、残す演出1つと削る演出1つも明記してください。"
-            )
+    def _looks_like_consensus(self, history: list[str]) -> bool:
+        if not history:
+            return False
 
-        convergence = (
-            "残す演出と捨てる演出を1つずつ明記し、なぜその折衷が一番シュールで実装しやすいかを答えてください。"
+        recent_text = "\n".join(history[-6:])
+        consensus_markers = (
+            "合意",
+            "一致",
+            "決定",
+            "確定",
+            "一本化",
+            "これでいく",
+            "この案でいく",
+            "採用",
+            "最終案",
         )
-        if current_turn >= 8:
-            convergence = (
-                "終盤なので新要素の追加は禁止です。既に出た案の部品だけを使って、"
-                "最終候補として残す核1つと捨てる要素1つを確定してください。"
-            )
-
-        return f"{base}{role_specific}{convergence}"
+        return any(marker in recent_text for marker in consensus_markers)
 
     async def think_and_reply(self, prompt: str, conversation_history: list[str]) -> str:
         decision = await self.decide_next_step(
@@ -193,72 +175,75 @@ class PMAgent(BaseAgent):
         )
         phase_label = self._phase_label(current_turn, max_turns)
         phase_instruction = self._phase_instruction(current_turn, max_turns)
+        remaining_turns = max(max_turns - current_turn + 1, 0)
         final_phase = force_final or current_turn >= max_turns
         kitchen_sink_detected = self._is_kitchen_sink_proposal(history)
         endgame_turn = 8 <= current_turn <= 9
+        consensus_likely = self._looks_like_consensus(history)
+        tradeoff_compared = self._has_tradeoff_comparison(history)
+        can_finish_early = (
+            current_turn >= 6 and consulted_marketing and consulted_dev and tradeoff_compared
+        )
 
         dynamic_instruction = (
             f"{base_instruction}\n"
-            "【現在の議論状況と判定条件】\n"
-            f"1. 現在のターン数: {current_turn} / 最大 {max_turns} ターン。\n"
-            f"2. 現在の会議フェーズ: {phase_label}。{phase_instruction}\n"
-            "3. まずは必ず ヂャイアン(マーケ) と スゴ杉くん(エンジニア) の両方に、違う見方で意見を出させてください。\n"
-            "4. current_turn が max_turns より小さい場合、next_action は必ず 'CALL_AGENT' とし、FINISH_FOR_PRESIDENT を選ばないでください。\n"
-            "5. current_turn が max_turns の場合のみ、next_action は 'FINISH_FOR_PRESIDENT' としてください。\n"
-            "6. CALL_AGENT の場合、target_agent と instruction_for_target を必ず記載し、次の専門家に向けた具体的な問いを作成してください。\n"
-            "7. speech では、今の進み具合を短くまとめつつ、フェーズに応じた鋭いツッコミ、リスク指摘、または矛盾指摘を少なくとも1つ入れてください。固定の3質問を毎回並べる必要はなく、phase_instruction の評価軸に沿って変化させてください。\n"
-            "8. speech は毎回 500文字前後（目安 400〜600文字）に収めてください。\n"
-            "9. Turn 1〜4では、たくさんのアイデアを出すように促してください。\n"
-            "10. Turn 5〜8では、作れるかどうかと面白いかどうかをぶつけて、残す案と捨てる案をはっきりさせてください。\n"
-            "11. Turn 9〜10では最終案を1案に絞る準備を行い、Turn 10で必ず FINISH_FOR_PRESIDENT を返してください。\n"
-            f"12. 現在の相談状況: ヂャイアン(マーケ) に相談済み={consulted_marketing}, スゴ杉くん(エンジニア) に相談済み={consulted_dev}。\n"
-            "13. divergence_prompt には、さらに別の発想を広げる短い質問を入れてください。\n"
-            "14. next_action が 'FINISH_FOR_PRESIDENT' の場合、JSON に final_recommendation / final_category / revision_guidance を含めてください。\n"
-            "15. final_recommendation は推奨する1案の要約を、final_category はその案のカテゴリ名、revision_guidance は NoGo 時の修正方針を返してください。\n"
-            "16. phase フィールドに現在のフェーズ名を返してください。\n"
-            "17. メンバーの意見を受けるとき、単なる称賛（例: 素敵、ありがとう）だけで終えることを禁止し、必ず検証質問か反証を続けてください。\n"
-            "18. 毎ターン、現在フェーズの評価軸のうち特に重要な観点を1つ以上要約内で触れてください。DIVERGENCE では新奇性・笑い・世界観の尖り、CONFLICT では工数・バグリスクと安定性のトレードオフ、FINAL では初見のインパクト・SNS拡散性・リトライのテンポを優先してください。\n"
-            "19. 『全部盛り込み』の妥協は禁止。speech または instruction_for_target に、残す要素と捨てる要素を必ず明記してください。\n"
-            "20. トレードオフ（あれを立てればこれが立たず）を毎ターン最低1つ示し、どちらを優先するかを明言してください。\n"
-            "21. Turn 5以降の残りターン数リマインドはシステム側で自動付与します。"
-            "あなた自身が同じ定型文を冒頭に繰り返し書くことを禁止します。\n"
-            "22. speech は長文のベタ書きを避け、2〜4文ごとに改行し、要点は箇条書き（・または1. 2.）で整理してください。\n"
-            "23. 評価軸を列挙するときは、必要な場合に限って箇条書きを使い、固定の3点セットに縛られずフェーズに合う鋭い切り口を優先してください。\n"
-            "24. Turn 8〜9では、新規アイデアの追加・拡張を禁止し、これまでの案のうち何を削るかの最終調整だけを行ってください。\n"
-            "25. CONFLICTフェーズでは、単にマーケ案を削るか開発案を守るかで終わらず、"
-            "『世界観の尖りを保ったまま、図形・文字・軽量アニメだけで最もシュールに見せる折衷案』を最低1つ作らせてください。\n"
-            "26. CALL_AGENT の instruction_for_target では、次の発言者に対して、残す演出1つ・捨てる演出1つ・軽量実装トリック1つを必ず求めてください。\n"
+            f"{self.CALL_NAME_RULES}\n"
+            "【進行ルール】\n"
+            f"1. 現在ターン: {current_turn}/{max_turns}。フェーズ: {phase_label}。{phase_instruction}\n"
+            "2. 原則は CALL_AGENT で議論を進める。"
+            "Turn 1〜5 では絶対に FINISH_FOR_PRESIDENT を選ばない。\n"
+            "3. CALL_AGENT の場合は target_agent と instruction_for_target を必ず設定し、抽象論ではなく具体的な比較質問を出す。\n"
+            f"4. 相談状況: マーケ={consulted_marketing}, 開発={consulted_dev}。片側に偏らないように次の担当を選ぶ。\n"
+            "5. speech では、前ターンとの差分を明示し、同じ冒頭定型・同じ論点の繰り返しを禁止。\n"
+            "6. 既に合意済み/論破済みの主張は蒸し返さず、必要なら『合意済み』と短く参照して次の未解決論点へ進む。\n"
+            "7. 『全部盛り』は不可。取捨選択や優先順位は必要だが、毎ターン同じ型で機械的に書かず自然な会話として述べる。\n"
+            "8. Turn 1〜4 は発散専用で、毎ターン別案の追加とエンジニアへの問いかけを必須化。"
+            "Turn 5〜7 は複数案の衝突/比較。Turn 8〜10 は新規拡張禁止で最終集約。\n"
+            f"9. 残りターンは {remaining_turns} 回。残り3回以下では、文脈に馴染む言い方で収束を促してよい（固定文のコピペは禁止）。\n"
+            "10. phase フィールドは現在フェーズ名を返し、FINISH_FOR_PRESIDENT 時は final_recommendation / final_category / revision_guidance を必ず埋める。\n"
+            "11. speech の可読性を最優先し、壁テキストを避ける。要約や取捨選択は箇条書きと太字を使い、話題ごとに空行を入れる。\n"
+            f"12. 早期終了許可条件: current_turn>=6 かつ マーケ/開発の両視点出揃い かつ 複数案の比較・トレードオフ議論済み。判定={can_finish_early}。\n"
+            "13. 会議中は社長への途中確認・途中相談をしない。社長への呼びかけは FINISH_FOR_PRESIDENT で最終提出するときだけに限定する。\n"
+            "14. 履歴に実発言がないメンバーを、参加済み・賛同済み・返答済みのように扱わない。未発言相手への感謝や応答を捏造しない。\n"
         )
+        if current_turn <= 4:
+            dynamic_instruction += (
+                "15. 発散フェーズ専用: マーケ案を肯定しつつ、必ず『別の切り口』を要求し、"
+                "次の担当にスゴ杉くん(エンジニア)を積極的に指名してください。\n"
+            )
+        if current_turn <= 5:
+            dynamic_instruction += (
+                "16. このターンは提出禁止。next_action は CALL_AGENT を選択してください。\n"
+            )
+        if not consulted_dev and current_turn <= 4:
+            dynamic_instruction += (
+                "17. まだエンジニア視点が未収集です。target_agent は dev を優先し、"
+                "実装コスト・技術アイデア・負荷見積りを質問してください。\n"
+            )
         if kitchen_sink_detected:
             dynamic_instruction += (
-                "27. 直前のマーケ提案は『全部乗せ』傾向です。曖昧に受け流すことを禁止します。"
-                "PMは必ず『あれもこれもは1日で作れない。〇〇と××のどちらか一つを今すぐ捨てなさい』"
-                "という二者択一を明言しつつ、捨てない側を図形・文字中心でどう一番面白く見せるかの折衷案も同時に要求してください。\n"
+                "18. 直前に全部乗せ傾向があります。二者択一で何を捨てるかを必ず確定し、残す側の見せ方を具体化してください。\n"
             )
         if endgame_turn:
             dynamic_instruction += (
-                "28. 終盤ルール: CALL_AGENTする場合も、指示は必ず『削る候補2つを提示し、どちらを捨てるか決める』形式にしてください。"
-                "新機能・新演出・新ジャンルの追加提案を求めてはいけません。"
-                "ただし、残した1案を図形・文字・軽量演出だけで成立させる最終ハイブリッド案の明文化は必須です。\n"
+                "19. 終盤ルール: 新規案の追加は禁止。削る候補2つを比較し、どちらを捨てるかを明言してください。\n"
             )
         if force_convergence:
             dynamic_instruction += (
-                "29. オーケストレーター判定で足踏み状態です。次の一手は強制収束モードで進め、"
-                "比較対象を最大2案に圧縮し、必ず1つを捨てる決定を宣言してください。"
-                "そのうえで、残した案を制約下でどう最も映えさせるかのハイブリッド解を具体化してください。\n"
+                "20. オーケストレーター判定で膠着中です。比較対象を2案までに圧縮し、"
+                "どちらを優先するかを明確にしてください。\n"
             )
         if revision_guidance:
             dynamic_instruction += (
-                "30. 社長のNoGo修正方針が与えられている場合、"
-                "その内容を最優先制約として扱い、"
-                "次の問いかけ・比較観点・最終提案の全てに必ず反映してください。\n"
-                "31. FINISH_FOR_PRESIDENT の際は、final_recommendation 内で"
-                "修正方針をどう満たしたかを明記してください。\n"
+                "21. 社長のNoGo修正方針は最優先制約として、問い・比較・最終提案のすべてに反映してください。\n"
+            )
+        if consensus_likely and not final_phase and can_finish_early:
+            dynamic_instruction += (
+                "22. 直近ログに合意の兆候があります。未解決論点がなければこのターンで FINISH_FOR_PRESIDENT を選択してください。\n"
             )
         if final_phase:
             dynamic_instruction += (
-                "32. このターンでは必ず FINISH_FOR_PRESIDENT を返し、"
-                "推奨する1案を明確にし、社長の Go/NoGo 判断に必要な情報を提出してください。\n"
+                "23. このターンでは FINISH_FOR_PRESIDENT を返し、推奨1案を明確に示してください。\n"
             )
 
         prompt_text = (
@@ -284,7 +269,7 @@ class PMAgent(BaseAgent):
                 },
                 "next_action": {
                     "type": "string",
-                    "enum": ["CALL_AGENT"] if not final_phase else ["CALL_AGENT", "FINISH_FOR_PRESIDENT"],
+                    "enum": ["CALL_AGENT", "FINISH_FOR_PRESIDENT"],
                 },
                 "target_agent": {
                     "type": "string",
@@ -296,9 +281,29 @@ class PMAgent(BaseAgent):
                 "final_category": {"type": "string"},
                 "revision_guidance": {"type": "string"},
             },
-            "required": ["speech", "phase", "next_action"] + (
-                ["target_agent", "instruction_for_target"] if not final_phase else ["final_recommendation", "final_category", "revision_guidance"]
-            ),
+            "required": ["speech", "phase", "next_action"],
+            "allOf": [
+                {
+                    "if": {
+                        "properties": {
+                            "next_action": {"const": "CALL_AGENT"}
+                        }
+                    },
+                    "then": {
+                        "required": ["target_agent", "instruction_for_target"]
+                    },
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "next_action": {"const": "FINISH_FOR_PRESIDENT"}
+                        }
+                    },
+                    "then": {
+                        "required": ["final_recommendation", "final_category", "revision_guidance"]
+                    },
+                },
+            ],
             "additionalProperties": False,
         }
 
@@ -321,35 +326,44 @@ class PMAgent(BaseAgent):
 
         decision = PMDecision.model_validate_json(response_text)
 
-        if decision.next_action == "CALL_AGENT":
-            hybrid_instruction = self._hybrid_bridge_instruction(
-                decision.target_agent,
-                current_turn,
-            )
+        if decision.next_action == "FINISH_FOR_PRESIDENT" and current_turn <= 5:
+            decision.next_action = "CALL_AGENT"
+            decision.target_agent = "dev" if not consulted_dev else "marketing"
             decision.instruction_for_target = (
-                f"{decision.instruction_for_target}\n{hybrid_instruction}"
-                if decision.instruction_for_target
-                else hybrid_instruction
+                "まだ発散/序盤フェーズです。提出は行わず、"
+                "別案の追加か、技術面と集客面の不足視点を補ってください。"
             )
 
-        if current_turn >= 5:
-            decision.speech = self._prepend_deadline_if_needed(
-                decision.speech,
-                current_turn,
-                max_turns,
-            )
-            if decision.next_action == "CALL_AGENT":
-                decision.instruction_for_target = self._prepend_deadline_if_needed(
-                    decision.instruction_for_target,
-                    current_turn,
-                    max_turns,
+        if (
+            decision.next_action == "FINISH_FOR_PRESIDENT"
+            and current_turn >= 6
+            and not can_finish_early
+        ):
+            decision.next_action = "CALL_AGENT"
+            if not consulted_dev:
+                decision.target_agent = "dev"
+                decision.instruction_for_target = (
+                    "提出前チェックです。エンジニア視点が不足しています。"
+                    "実装難易度・工数・技術リスクを具体化してください。"
+                )
+            elif not consulted_marketing:
+                decision.target_agent = "marketing"
+                decision.instruction_for_target = (
+                    "提出前チェックです。マーケ視点が不足しています。"
+                    "訴求軸・拡散導線・ターゲット適合性を具体化してください。"
+                )
+            else:
+                decision.target_agent = "dev"
+                decision.instruction_for_target = (
+                    "提出前チェックです。比較が不足しています。"
+                    "候補2案のトレードオフ(実装負荷×拡散性)を明示し、"
+                    "採用/不採用理由を短く整理してください。"
                 )
 
         if decision.next_action == "CALL_AGENT" and kitchen_sink_detected:
             fork_prompt = (
-                "あれもこれもは1日で作れないから、候補Aと候補Bのどちらか一つを今すぐ捨てなさい。"
-                "捨てる理由を工数と面白さの両面で1つずつ示してください。"
-                "そのうえで、残した側を図形とテキスト中心でどう一番シュールに見せるかも必ず書いてください。"
+                "全部乗せは禁止です。候補A/Bのどちらを捨てるかを決め、"
+                "残した側を図形とテキスト中心でどう最もシュールに見せるかを書いてください。"
             )
             decision.instruction_for_target = (
                 f"{decision.instruction_for_target}\n{fork_prompt}"

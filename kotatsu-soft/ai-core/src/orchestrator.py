@@ -12,8 +12,42 @@ from agents.pm.schemas import PMDecision
 
 class DynamicOrchestrator:
     WEBHOOK_NAME = "Kotatsu AI 会話"
-    _DEADLINE_REMINDER_RE = re.compile(
-        r"^\s*(?:[-・*]\s*)?議論できるのはあと\s*\d+\s*回よ。そろそろ絞り込みましょう\s*\n*"
+    _NON_PM_AGENT_ORDER = ("marketing", "dev")
+    _CONVERGENCE_KEYWORDS = (
+        "絞",
+        "残す",
+        "捨て",
+        "削",
+        "決定",
+        "決め",
+        "合意",
+        "一本化",
+        "収束",
+        "採用",
+        "最終",
+        "確定",
+    )
+    _COMPARISON_STRONG_KEYWORDS = (
+        "比較",
+        "トレードオフ",
+        "二者択一",
+        "案A",
+        "案B",
+        "メリット",
+        "デメリット",
+        "採用理由",
+        "不採用理由",
+        "優先順位",
+    )
+    _COMPARISON_DECISION_KEYWORDS = (
+        "どちら",
+        "優先",
+        "残す",
+        "捨て",
+        "削る",
+        "諦め",
+        "採用",
+        "不採用",
     )
 
     def __init__(
@@ -28,39 +62,15 @@ class DynamicOrchestrator:
         self.other_agents = other_agents
         self.president_mention = president_mention
         self.channel_webhooks: dict[int, discord.Webhook] = {}
+        self.last_meeting_trace: list[dict] = []
 
     @staticmethod
     def _expected_phase_for_turn(current_turn: int) -> str:
         if current_turn <= 4:
             return "DIVERGENCE"
-        if current_turn <= 8:
+        if current_turn <= 7:
             return "CONFLICT"
         return "FINAL"
-
-    @staticmethod
-    def _deadline_prefix(current_turn: int, max_turns: int) -> str:
-        remaining = max(max_turns - current_turn + 1, 0)
-        return f"議論できるのはあと{remaining}回よ。そろそろ絞り込みましょう"
-
-    @classmethod
-    def _strip_leading_deadline_reminders(cls, text: Optional[str]) -> str:
-        cleaned = (text or "").lstrip()
-        while True:
-            match = cls._DEADLINE_REMINDER_RE.match(cleaned)
-            if not match:
-                break
-            cleaned = cleaned[match.end():].lstrip()
-        return cleaned
-
-    def _ensure_deadline_prefix(self, text: Optional[str], current_turn: int, max_turns: int) -> str:
-        body = self._strip_leading_deadline_reminders(text)
-        if current_turn < 5:
-            return body
-
-        prefix = self._deadline_prefix(current_turn, max_turns)
-        if not body:
-            return prefix
-        return f"{prefix}\n{body}"
 
     @staticmethod
     def _contains_any(text: str, keywords: tuple[str, ...]) -> bool:
@@ -90,6 +100,50 @@ class DynamicOrchestrator:
             "優先",
         )
         return self._contains_any(text, narrowing_words)
+
+    def _has_tradeoff_comparison(
+        self,
+        history: list[str],
+        decision: Optional[PMDecision] = None,
+    ) -> bool:
+        parts = ["\n".join(history[-10:])]
+        if decision:
+            parts.append(decision.speech or "")
+            parts.append(decision.instruction_for_target or "")
+        text = "\n".join(parts)
+        has_strong = self._contains_any(text, self._COMPARISON_STRONG_KEYWORDS)
+        has_decision = self._contains_any(text, self._COMPARISON_DECISION_KEYWORDS)
+        has_explicit_two_options = "案A" in text and "案B" in text
+        return has_explicit_two_options or (has_strong and has_decision)
+
+    @staticmethod
+    def _normalize_for_repeat_check(text: str) -> str:
+        normalized = re.sub(r"\s+", "", text or "")
+        normalized = re.sub(r"[、。,.!！?？:：\-・]", "", normalized)
+        return normalized
+
+    def _recent_log_suggests_convergence(
+        self,
+        history: list[str],
+        decision_speech: Optional[str],
+        instruction_for_target: Optional[str],
+        *,
+        window_size: int = 6,
+    ) -> bool:
+        recent_lines = history[-window_size:] if window_size > 0 else history
+        recent_text = "\n".join(recent_lines)
+        inspection_text = "\n".join(
+            [recent_text, decision_speech or "", instruction_for_target or ""]
+        )
+        return self._contains_any(inspection_text, self._CONVERGENCE_KEYWORDS)
+
+    def _is_repetitive_pm_speech(self, previous_pm_speech: str, current_pm_speech: str) -> bool:
+        if not previous_pm_speech or not current_pm_speech:
+            return False
+
+        previous_core = self._normalize_for_repeat_check(previous_pm_speech)
+        current_core = self._normalize_for_repeat_check(current_pm_speech)
+        return bool(previous_core) and previous_core == current_core
 
     @staticmethod
     def _split_discord_message(text: str, limit: int = 2000) -> list[str]:
@@ -210,22 +264,70 @@ class DynamicOrchestrator:
                 consulted.add("dev")
         return consulted
 
+    @staticmethod
+    def _history_line_mentions_role(line: str, role: str) -> bool:
+        role_markers = {
+            "marketing": (
+                "ヂャイアン(マーケ):",
+                "@ヂャイアン(マーケ)",
+                "Gian_Agent:",
+                "@Gian_Agent",
+                "marketing:",
+            ),
+            "dev": (
+                "スゴ杉くん(エンジニア):",
+                "@スゴ杉くん(エンジニア)",
+                "Takasugi_Agent:",
+                "@Takasugi_Agent",
+                "dev:",
+            ),
+        }
+        return any(marker in line for marker in role_markers.get(role, ()))
+
+    def _last_non_pm_role(self, history: list[str]) -> Optional[str]:
+        for line in reversed(history):
+            for role in self._NON_PM_AGENT_ORDER:
+                if self._history_line_mentions_role(line, role):
+                    return role
+        return None
+
+    def _select_next_non_pm_role(
+        self,
+        history: list[str],
+        consulted_counts: dict[str, int],
+    ) -> Optional[str]:
+        available_roles = [role for role in self._NON_PM_AGENT_ORDER if role in self.other_agents]
+        if not available_roles:
+            return None
+
+        for role in available_roles:
+            if consulted_counts.get(role, 0) == 0:
+                return role
+
+        last_role = self._last_non_pm_role(history)
+        if last_role in available_roles and len(available_roles) > 1:
+            last_index = available_roles.index(last_role)
+            return available_roles[(last_index + 1) % len(available_roles)]
+
+        return min(available_roles, key=lambda role: consulted_counts.get(role, 0))
+
     async def execute_meeting(
         self,
         theme: str,
         channel: discord.TextChannel,
         revision_guidance: Optional[str] = None,
     ) -> tuple[str, list[str], Optional[PMDecision]]:
+        self.last_meeting_trace = []
         history: list[str] = []
         max_turns = 10
         current_turn = 1
         last_pm_speech = ""
         final_decision: Optional[PMDecision] = None
         consulted_counts: dict[str, int] = {"marketing": 0, "dev": 0}
-        per_role_min = 2
         force_convergence_next_turn = False
 
         while current_turn <= max_turns:
+            was_forced_convergence = force_convergence_next_turn
             try:
                 decision = await self.pm.decide_next_step(
                     theme,
@@ -233,7 +335,7 @@ class DynamicOrchestrator:
                     current_turn,
                     max_turns,
                     revision_guidance=revision_guidance,
-                    force_convergence=force_convergence_next_turn,
+                    force_convergence=was_forced_convergence,
                 )
                 force_convergence_next_turn = False
             except Exception as exc:
@@ -249,7 +351,22 @@ class DynamicOrchestrator:
 
             # hard guardrail: turn-based phase goal validation and convergence escalation
             expected_phase = self._expected_phase_for_turn(current_turn)
-            phase_drift = decision.phase != expected_phase
+            convergence_in_context = self._recent_log_suggests_convergence(
+                history,
+                decision.speech,
+                decision.instruction_for_target,
+            )
+            trace_entry = {
+                "turn": current_turn,
+                "expected_phase": expected_phase,
+                "pm_phase_initial": decision.phase,
+                "next_action_initial": decision.next_action,
+                "target_initial": decision.target_agent,
+                "consulted_before": dict(consulted_counts),
+                "convergence_keywords_detected": convergence_in_context,
+                "guardrails": [],
+            }
+            phase_drift = decision.phase != expected_phase and not convergence_in_context
             if phase_drift:
                 await channel.send(
                     "⚠️ 進行フェーズがターン目標から逸脱しています。"
@@ -257,30 +374,22 @@ class DynamicOrchestrator:
                 )
                 force_convergence_next_turn = True
                 decision.phase = expected_phase
+                trace_entry["guardrails"].append("phase_drift_adjusted")
 
-            if current_turn >= 5:
-                decision.speech = self._ensure_deadline_prefix(
-                    decision.speech,
-                    current_turn,
-                    max_turns,
-                )
-                if decision.next_action == "CALL_AGENT":
-                    decision.instruction_for_target = self._ensure_deadline_prefix(
-                        decision.instruction_for_target,
-                        current_turn,
-                        max_turns,
-                    )
+            if self._is_repetitive_pm_speech(last_pm_speech, decision.speech):
+                force_convergence_next_turn = True
+                trace_entry["guardrails"].append("repetitive_pm_speech")
 
-            if 5 <= current_turn <= 8 and decision.next_action == "CALL_AGENT":
+            if 5 <= current_turn <= 7 and decision.next_action == "CALL_AGENT":
                 current_instruction = (decision.instruction_for_target or "").strip()
                 if not self._looks_like_narrowing(current_instruction):
                     force_convergence_next_turn = True
                     decision.instruction_for_target = (
-                        f"{self._deadline_prefix(current_turn, max_turns)}\n"
                         "ここからは衝突・削ぎ落としフェーズです。"
-                        "残す要素と捨てる要素を明示し、二者択一でどちらを削るかを決めてください。"
-                        "新規アイデアの追加は禁止し、1日実装可能性と面白さのトレードオフを必ず示してください。"
+                        "世界観の尖りを保ったまま、図形・文字・軽量アニメだけで最もシュールに見せる折衷案を最低1つ提示してください。"
+                        "そのうえで何を優先し、何を諦めるかを自然な言葉で示してください。"
                     )
+                    trace_entry["guardrails"].append("conflict_requires_narrowing")
 
             if current_turn in (8, 9):
                 inspection_text = (decision.speech or "") + "\n" + (decision.instruction_for_target or "")
@@ -288,10 +397,10 @@ class DynamicOrchestrator:
                     force_convergence_next_turn = True
                     if decision.next_action == "CALL_AGENT":
                         decision.instruction_for_target = (
-                            f"{self._deadline_prefix(current_turn, max_turns)}\n"
                             "終盤のため新しい大風呂敷は禁止。これまでの候補から削る対象を2つ挙げ、"
-                            "どちらを捨てるかを今ターンで決め、最終的に残す1案の核だけを返答してください。"
+                            "どちらを諦めるかを今ターンで決め、最終的に残す1案の核だけを返答してください。"
                         )
+                    trace_entry["guardrails"].append("endgame_blocks_expansion")
 
             try:
                 await self._post_via_webhook(self.pm, decision.speech, channel)
@@ -303,33 +412,14 @@ class DynamicOrchestrator:
 
             history.append(f"{self.pm.name}: {decision.speech}")
             last_pm_speech = decision.speech
-            # enforce multi-exchange: require each expert to be consulted at least `per_role_min` times
-            if current_turn < max_turns and decision.next_action == "FINISH_FOR_PRESIDENT":
-                await channel.send(
-                    "⚠️ まだ最終ターンではないため、議論を継続します。"
-                    " 未確認の観点をさらに深掘りして、次の専門家に具体的な問いを投げてください。"
-                )
-                decision.next_action = "CALL_AGENT"
-                if not decision.target_agent or decision.target_agent not in self.other_agents:
-                    decision.target_agent = (
-                        "marketing"
-                        if consulted_counts.get("marketing", 0) <= consulted_counts.get("dev", 0)
-                        else "dev"
-                    )
-                if not decision.instruction_for_target or not decision.instruction_for_target.strip():
-                    decision.instruction_for_target = (
-                        "PMからの依頼です。まだ議論が続いている段階です。"
-                        " 次の専門家として、このテーマに対する追加の観点や改善案を2〜3点挙げ、"
-                        "前の発言を踏まえて新しい視点を提供してください。"
-                    )
 
             if decision.next_action == "CALL_AGENT":
+                expected_target = self._select_next_non_pm_role(history, consulted_counts)
+                if expected_target and decision.target_agent != expected_target:
+                    decision.target_agent = expected_target
+                    trace_entry["guardrails"].append("rotation_adjusted")
                 if not decision.target_agent or decision.target_agent not in self.other_agents:
-                    decision.target_agent = (
-                        "marketing"
-                        if consulted_counts.get("marketing", 0) <= consulted_counts.get("dev", 0)
-                        else "dev"
-                    )
+                    decision.target_agent = expected_target
                 if not decision.instruction_for_target or not decision.instruction_for_target.strip():
                     decision.instruction_for_target = (
                         "PMからの依頼です。まだ議論が続いている段階です。"
@@ -337,29 +427,85 @@ class DynamicOrchestrator:
                         "前の発言を踏まえて新しい視点を提供してください。"
                     )
 
-            if decision.next_action == "FINISH_FOR_PRESIDENT":
-                if (
-                    consulted_counts.get("marketing", 0) < per_role_min
-                    or consulted_counts.get("dev", 0) < per_role_min
-                ) and current_turn < max_turns:
-                    await channel.send(
-                        "⚠️ PMが終了を提案しましたが、まだ十分な専門意見が集まっていません。"
-                        " 未相談のエージェントへ再度問いかけます。"
-                    )
-                    target = (
-                        "marketing"
-                        if consulted_counts.get("marketing", 0) <= consulted_counts.get("dev", 0)
-                        else "dev"
-                    )
-                    decision.next_action = "CALL_AGENT"
-                    decision.target_agent = target
+            # hard guardrail: Turn 1-5 never allow finish submission.
+            if decision.next_action == "FINISH_FOR_PRESIDENT" and current_turn <= 5:
+                decision.next_action = "CALL_AGENT"
+                trace_entry["guardrails"].append("block_finish_before_turn6")
+                if consulted_counts.get("dev", 0) == 0:
+                    decision.target_agent = "dev"
                     decision.instruction_for_target = (
-                        "PMからの依頼です。まだ議論に参加していない、または意見が不足している専門家として、"
-                        "このテーマに対する追加の観点や改善案を2〜3点挙げてください。"
+                        "まだ序盤フェーズです。提出は禁止。"
+                        "エンジニア視点で実装コスト・技術アイデア・難所を具体化し、"
+                        "既存案と異なる切り口の代替案も1つ示してください。"
                     )
                 else:
-                    final_decision = decision
-                    break
+                    decision.target_agent = "marketing"
+                    decision.instruction_for_target = (
+                        "まだ序盤フェーズです。提出は禁止。"
+                        "既存案と異なる訴求軸の代替案を1つ追加し、"
+                        "拡散導線の違いを簡潔に比較してください。"
+                    )
+
+            # hard guardrail: early finish allowed only after both roles and tradeoff comparison.
+            if decision.next_action == "FINISH_FOR_PRESIDENT" and current_turn >= 6:
+                has_both_perspectives = (
+                    consulted_counts.get("marketing", 0) > 0
+                    and consulted_counts.get("dev", 0) > 0
+                )
+                compared_tradeoffs = self._has_tradeoff_comparison(history, decision)
+                trace_entry["finish_gate"] = {
+                    "has_both_perspectives": has_both_perspectives,
+                    "compared_tradeoffs": compared_tradeoffs,
+                }
+                if not (has_both_perspectives and compared_tradeoffs):
+                    decision.next_action = "CALL_AGENT"
+                    trace_entry["guardrails"].append("block_finish_until_both_roles_and_tradeoff")
+                    if consulted_counts.get("dev", 0) == 0:
+                        decision.target_agent = "dev"
+                        decision.instruction_for_target = (
+                            "提出前チェック: エンジニア視点が不足。"
+                            "実装工数・技術リスク・実現方法を具体化してください。"
+                        )
+                    elif consulted_counts.get("marketing", 0) == 0:
+                        decision.target_agent = "marketing"
+                        decision.instruction_for_target = (
+                            "提出前チェック: マーケ視点が不足。"
+                            "拡散性・ターゲット適合・訴求差分を具体化してください。"
+                        )
+                    else:
+                        decision.target_agent = "dev"
+                        decision.instruction_for_target = (
+                            "提出前チェック: 比較検討が不足。"
+                            "候補2案のトレードオフを、実装負荷と集客インパクトで対比して提示してください。"
+                        )
+
+            # divergence phase must include engineer voice at least once.
+            if (
+                decision.next_action == "CALL_AGENT"
+                and current_turn <= 4
+                and consulted_counts.get("dev", 0) == 0
+            ):
+                decision.target_agent = "dev"
+                trace_entry["guardrails"].append("force_dev_in_divergence")
+                base_instruction = (decision.instruction_for_target or "").strip()
+                mandatory_dev_prompt = (
+                    "発散フェーズ要件: エンジニア視点を必ず追加してください。"
+                    "実装コスト、技術ギミック、難所回避案を含めて回答してください。"
+                )
+                decision.instruction_for_target = (
+                    f"{base_instruction}\n{mandatory_dev_prompt}"
+                    if base_instruction
+                    else mandatory_dev_prompt
+                )
+
+            trace_entry["pm_phase_final"] = decision.phase
+            trace_entry["next_action_final"] = decision.next_action
+            trace_entry["target_final"] = decision.target_agent
+            self.last_meeting_trace.append(trace_entry)
+
+            if decision.next_action == "FINISH_FOR_PRESIDENT":
+                final_decision = decision
+                break
 
             if current_turn >= max_turns and decision.next_action != "FINISH_FOR_PRESIDENT":
                 await channel.send(
@@ -424,6 +570,28 @@ class DynamicOrchestrator:
             current_turn += 1
 
         return last_pm_speech, history, final_decision
+
+
+def build_president_final_message(president_mention: str, decision: PMDecision) -> str:
+    final_category = (decision.final_category or "未定").strip() or "未定"
+    final_recommendation = (
+        (decision.final_recommendation or "").strip()
+        or "（提案内容が未設定です）"
+    )
+    revision_guidance = (
+        (decision.revision_guidance or "").strip()
+        or "改善の方向性を明確にして、再度検討してください。"
+    )
+
+    return (
+        "---\n"
+        f"{president_mention} 最終提案を提示しますね！\n\n"
+        "**【社長への最終提案】**\n"
+        f"・**カテゴリ:** {final_category}\n"
+        f"・**提案概要:** {final_recommendation}\n"
+        f"・**修正ガイドライン（NoGo時）:** {revision_guidance}\n"
+        "---"
+    )
 
 
 class ProposalSelectView(discord.ui.View):
