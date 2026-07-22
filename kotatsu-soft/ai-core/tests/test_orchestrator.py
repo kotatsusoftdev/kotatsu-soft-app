@@ -406,13 +406,14 @@ async def test_execute_meeting_overrides_pm_target_to_rotation_order() -> None:
     await orchestrator.execute_meeting("theme", channel)
 
     assert len(marketing.calls) == 2
-    assert len(dev.calls) == 1
-    assert marketing.calls[0][0].startswith("ask dev first")
-    assert dev.calls[0][0].startswith("ask marketing second")
-    assert orchestrator.last_meeting_trace[0]["target_final"] == "marketing"
-    assert "rotation_adjusted" in orchestrator.last_meeting_trace[0]["guardrails"]
-    assert orchestrator.last_meeting_trace[1]["target_final"] == "dev"
-    assert "rotation_adjusted" in orchestrator.last_meeting_trace[1]["guardrails"]
+    assert len(dev.calls) == 2
+    assert dev.calls[0][0].startswith("ask dev first")
+    assert marketing.calls[0][0].startswith("ask marketing second")
+    assert orchestrator.last_meeting_trace[0]["target_final"] == "dev"
+    assert "force_dev_in_divergence" in orchestrator.last_meeting_trace[0]["guardrails"]
+    assert orchestrator.last_meeting_trace[1]["target_final"] == "marketing"
+    assert orchestrator.last_meeting_trace[2]["target_final"] == "dev"
+    assert "rotation_adjusted" in orchestrator.last_meeting_trace[2]["guardrails"]
 
 
 @pytest.mark.asyncio

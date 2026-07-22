@@ -66,7 +66,7 @@ class DynamicOrchestrator:
 
     @staticmethod
     def _expected_phase_for_turn(current_turn: int) -> str:
-        if current_turn <= 4:
+        if current_turn <= 5:
             return "DIVERGENCE"
         if current_turn <= 7:
             return "CONFLICT"
@@ -144,6 +144,33 @@ class DynamicOrchestrator:
         previous_core = self._normalize_for_repeat_check(previous_pm_speech)
         current_core = self._normalize_for_repeat_check(current_pm_speech)
         return bool(previous_core) and previous_core == current_core
+
+    def _is_discussion_stalled(self, history: list[str], current_turn: int) -> bool:
+        if current_turn < 6 or len(history) < 6:
+            return False
+
+        recent_lines = history[-6:]
+        normalized_bodies: list[str] = []
+        for line in recent_lines:
+            body = line.split(":", 1)[1] if ":" in line else line
+            normalized = self._normalize_for_repeat_check(body)
+            if normalized:
+                normalized_bodies.append(normalized)
+
+        if len(normalized_bodies) < 4:
+            return False
+
+        unique_count = len(set(normalized_bodies))
+        repeated_loop = unique_count <= 2
+        last_four = normalized_bodies[-4:]
+        ping_pong_loop = (
+            len(last_four) == 4
+            and last_four[0] == last_four[2]
+            and last_four[1] == last_four[3]
+            and last_four[0] != last_four[1]
+        )
+        compared_tradeoffs = self._has_tradeoff_comparison(history[-8:])
+        return (repeated_loop or ping_pong_loop) and not compared_tradeoffs
 
     @staticmethod
     def _split_discord_message(text: str, limit: int = 2000) -> list[str]:
@@ -325,19 +352,24 @@ class DynamicOrchestrator:
         final_decision: Optional[PMDecision] = None
         consulted_counts: dict[str, int] = {"marketing": 0, "dev": 0}
         force_convergence_next_turn = False
+        force_final_next_turn = False
 
         while current_turn <= max_turns:
             was_forced_convergence = force_convergence_next_turn
+            stalled_context = self._is_discussion_stalled(history, current_turn)
+            should_force_final = current_turn >= 8 or force_final_next_turn or stalled_context
             try:
                 decision = await self.pm.decide_next_step(
                     theme,
                     history,
                     current_turn,
                     max_turns,
+                    force_final=should_force_final,
                     revision_guidance=revision_guidance,
                     force_convergence=was_forced_convergence,
                 )
                 force_convergence_next_turn = False
+                force_final_next_turn = False
             except Exception as exc:
                 error_text = str(exc)
                 if len(error_text) > 1200:
@@ -364,6 +396,8 @@ class DynamicOrchestrator:
                 "target_initial": decision.target_agent,
                 "consulted_before": dict(consulted_counts),
                 "convergence_keywords_detected": convergence_in_context,
+                "force_final_requested": should_force_final,
+                "stalled_context": stalled_context,
                 "guardrails": [],
             }
             phase_drift = decision.phase != expected_phase and not convergence_in_context
@@ -379,6 +413,9 @@ class DynamicOrchestrator:
             if self._is_repetitive_pm_speech(last_pm_speech, decision.speech):
                 force_convergence_next_turn = True
                 trace_entry["guardrails"].append("repetitive_pm_speech")
+                if current_turn >= 6:
+                    force_final_next_turn = True
+                    trace_entry["guardrails"].append("schedule_force_final_due_to_repeat")
 
             if 5 <= current_turn <= 7 and decision.next_action == "CALL_AGENT":
                 current_instruction = (decision.instruction_for_target or "").strip()
@@ -482,7 +519,7 @@ class DynamicOrchestrator:
             # divergence phase must include engineer voice at least once.
             if (
                 decision.next_action == "CALL_AGENT"
-                and current_turn <= 4
+                and current_turn <= 5
                 and consulted_counts.get("dev", 0) == 0
             ):
                 decision.target_agent = "dev"

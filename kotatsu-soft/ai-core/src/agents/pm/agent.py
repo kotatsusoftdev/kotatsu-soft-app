@@ -31,7 +31,7 @@ class PMAgent(BaseAgent):
         self.client = genai.Client(api_key=api_key)
 
     def _phase_label(self, current_turn: int, max_turns: int) -> str:
-        if current_turn <= 4:
+        if current_turn <= 5:
             return "DIVERGENCE"
         if current_turn <= 7:
             return "CONFLICT"
@@ -41,14 +41,14 @@ class PMAgent(BaseAgent):
         phase = self._phase_label(current_turn, max_turns)
         if phase == "DIVERGENCE":
             return (
-                "Turn 1〜4 の発散フェーズです。"
+                "Turn 1〜5 の発散フェーズです。"
                 "この区間では合意・提出は禁止です。"
                 "毎ターン、既出案と明確に違う切り口の別案を最低1つ追加し、"
                 "必ずスゴ杉くん(エンジニア)にも実現可能性・実装負荷・技術ギミックの観点で問いを振ってください。"
             )
         if phase == "CONFLICT":
             return (
-                "Turn 5〜7 の衝突フェーズです。"
+                "Turn 6〜7 の衝突フェーズです。"
                 "複数案が出揃っている前提で、初めて比較・衝突に入ります。"
                 "単に削るだけでなく、技術面(実装コスト/難易度)と集客面(拡散性/訴求)のトレードオフを明示してください。"
                 "何を優先し、何を諦めるかを自然な言葉で整理してください。"
@@ -194,11 +194,13 @@ class PMAgent(BaseAgent):
             "Turn 1〜5 では絶対に FINISH_FOR_PRESIDENT を選ばない。\n"
             "3. CALL_AGENT の場合は target_agent と instruction_for_target を必ず設定し、抽象論ではなく具体的な比較質問を出す。\n"
             f"4. 相談状況: マーケ={consulted_marketing}, 開発={consulted_dev}。片側に偏らないように次の担当を選ぶ。\n"
-            "5. speech では、前ターンとの差分を明示し、同じ冒頭定型・同じ論点の繰り返しを禁止。\n"
-            "6. 既に合意済み/論破済みの主張は蒸し返さず、必要なら『合意済み』と短く参照して次の未解決論点へ進む。\n"
+            "5. speech では、前ターンとの差分を明示し、同じ冒頭定型・同じ論点の繰り返しを禁止。"
+            "固定質問（例:『本当に1日で作れるの？』）の機械的な連投はしない。\n"
+            "6. 開発側から工数・実装手段の根拠が出たら評価し、"
+            "安心材料として受け止めたうえで次の論点（演出・見た目インパクト等）へ自然に進める。\n"
             "7. 『全部盛り』は不可。取捨選択や優先順位は必要だが、毎ターン同じ型で機械的に書かず自然な会話として述べる。\n"
-            "8. Turn 1〜4 は発散専用で、毎ターン別案の追加とエンジニアへの問いかけを必須化。"
-            "Turn 5〜7 は複数案の衝突/比較。Turn 8〜10 は新規拡張禁止で最終集約。\n"
+            "8. Turn 1〜5 は発散専用で、毎ターン別案の追加とエンジニアへの問いかけを必須化。"
+            "Turn 6〜7 は複数案の衝突/比較。Turn 8〜10 は新規拡張禁止で最終集約。\n"
             f"9. 残りターンは {remaining_turns} 回。残り3回以下では、文脈に馴染む言い方で収束を促してよい（固定文のコピペは禁止）。\n"
             "10. phase フィールドは現在フェーズ名を返し、FINISH_FOR_PRESIDENT 時は final_recommendation / final_category / revision_guidance を必ず埋める。\n"
             "11. speech の可読性を最優先し、壁テキストを避ける。要約や取捨選択は箇条書きと太字を使い、話題ごとに空行を入れる。\n"
@@ -206,16 +208,17 @@ class PMAgent(BaseAgent):
             "13. 会議中は社長への途中確認・途中相談をしない。社長への呼びかけは FINISH_FOR_PRESIDENT で最終提出するときだけに限定する。\n"
             "14. 履歴に実発言がないメンバーを、参加済み・賛同済み・返答済みのように扱わない。未発言相手への感謝や応答を捏造しない。\n"
         )
-        if current_turn <= 4:
+        if current_turn <= 5:
             dynamic_instruction += (
-                "15. 発散フェーズ専用: マーケ案を肯定しつつ、必ず『別の切り口』を要求し、"
-                "次の担当にスゴ杉くん(エンジニア)を積極的に指名してください。\n"
+                "15. 発散フェーズ専用: 1案に寄りそうでも鵜呑みにせず、"
+                "『それも良いけど、逆の発想やもっとシュールな演出だとどうなる？』"
+                "という形で必ず別の切り口を要求してください。\n"
             )
         if current_turn <= 5:
             dynamic_instruction += (
                 "16. このターンは提出禁止。next_action は CALL_AGENT を選択してください。\n"
             )
-        if not consulted_dev and current_turn <= 4:
+        if not consulted_dev and current_turn <= 5:
             dynamic_instruction += (
                 "17. まだエンジニア視点が未収集です。target_agent は dev を優先し、"
                 "実装コスト・技術アイデア・負荷見積りを質問してください。\n"
@@ -237,13 +240,18 @@ class PMAgent(BaseAgent):
             dynamic_instruction += (
                 "21. 社長のNoGo修正方針は最優先制約として、問い・比較・最終提案のすべてに反映してください。\n"
             )
+        if consensus_likely and current_turn <= 5:
+            dynamic_instruction += (
+                "22. 序盤で合意の兆候があっても確定しない。"
+                "必ず代替案を1つ以上追加し、どの切り口が最も意外性/拡散性を生むか比較させてください。\n"
+            )
         if consensus_likely and not final_phase and can_finish_early:
             dynamic_instruction += (
-                "22. 直近ログに合意の兆候があります。未解決論点がなければこのターンで FINISH_FOR_PRESIDENT を選択してください。\n"
+                "23. 直近ログに合意の兆候があります。未解決論点がなければこのターンで FINISH_FOR_PRESIDENT を選択してください。\n"
             )
         if final_phase:
             dynamic_instruction += (
-                "23. このターンでは FINISH_FOR_PRESIDENT を返し、推奨1案を明確に示してください。\n"
+                "24. このターンでは FINISH_FOR_PRESIDENT を返し、推奨1案を明確に示してください。\n"
             )
 
         prompt_text = (
@@ -358,6 +366,22 @@ class PMAgent(BaseAgent):
                     "提出前チェックです。比較が不足しています。"
                     "候補2案のトレードオフ(実装負荷×拡散性)を明示し、"
                     "採用/不採用理由を短く整理してください。"
+                )
+
+        if decision.next_action == "CALL_AGENT" and current_turn <= 5:
+            early_consensus = self._looks_like_consensus(
+                history + [f"{self.name}: {decision.speech}"]
+            )
+            if early_consensus:
+                forced_divergence_prompt = (
+                    "序盤のため早期一本化は禁止です。"
+                    "いまの案を一度保留し、逆方向の発想か、さらにシュールな演出案を最低1つ追加してください。"
+                    "追加案は既存案との違い（実装負荷・見た目インパクト・拡散導線）を簡潔に比較してください。"
+                )
+                decision.instruction_for_target = (
+                    f"{decision.instruction_for_target}\n{forced_divergence_prompt}"
+                    if decision.instruction_for_target
+                    else forced_divergence_prompt
                 )
 
         if decision.next_action == "CALL_AGENT" and kitchen_sink_detected:
