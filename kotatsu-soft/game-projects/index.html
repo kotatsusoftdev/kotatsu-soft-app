@@ -576,11 +576,11 @@
     <section class="global-stats" aria-label="ポータル全体実績">
       <article class="global-stat fade-up">
         <p class="label">🎯 累計ゲームプレイ数</p>
-        <p class="value global-total-play" id="totalPlayCount" data-default-count="12450" aria-live="polite">12,450 回</p>
+        <p class="value global-total-play" id="totalPlayCount" aria-live="polite">-</p>
       </article>
       <article class="global-stat fade-up">
         <p class="label">👀 ポータル総PV</p>
-        <p class="value global-pv" id="portalPvCount" data-default-count="45200" aria-live="polite">45,200 PV</p>
+        <p class="value global-pv" id="portalPvCount" aria-live="polite">-</p>
       </article>
     </section>
 
@@ -598,7 +598,7 @@
           <div class="card-footer">
             <div class="actions">
               <span class="pill">Shooter / 10 sec</span>
-              <span class="pill play-count play-count-mikan" data-stat-id="mikan" data-default-count="8320" aria-live="polite">🎮 8,320回プレイ</span>
+              <span class="pill play-count play-count-mikan" data-stat-id="mikan" aria-live="polite">🎮 -回プレイ</span>
               <a class="action-btn play" data-game-id="mikan_buster" href="./001_mikan_buster/src/index.html">Play</a>
               <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
               <a class="action-btn spec-link" href="../shared/specs/spec_20260720_112402.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
@@ -613,7 +613,7 @@
           <div class="card-footer">
             <div class="actions">
               <span class="pill">Stack Action</span>
-              <span class="pill play-count play-count-nyanko" data-stat-id="nyanko" data-default-count="4130" aria-live="polite">🎮 4,130回プレイ</span>
+              <span class="pill play-count play-count-nyanko" data-stat-id="nyanko" aria-live="polite">🎮 -回プレイ</span>
               <a class="action-btn play" data-game-id="nyanko_dive" href="./002_nyanko_dive/src/index.html">Play</a>
               <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
               <a class="action-btn spec-link" href="../shared/specs/spec_ゲーム開発___ブラウザミニゲーム_20260722_125043.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
@@ -657,19 +657,6 @@
       return Math.max(0, Math.trunc(num));
     }
 
-    function parseCountFromText(text) {
-      const digits = (text || "").replace(/[^\d]/g, "");
-      if (!digits) return null;
-      return normalizeCount(Number(digits));
-    }
-
-    function readDefaultCount(el) {
-      if (!el) return null;
-      const byData = normalizeCount(el.dataset.defaultCount);
-      if (byData !== null) return byData;
-      return parseCountFromText(el.textContent);
-    }
-
     function setGlobalPv(value) {
       const count = normalizeCount(value);
       if (!portalPvEl || count === null) return;
@@ -691,13 +678,6 @@
     function getBadgeStatId(el) {
       if (!el) return null;
       return el.dataset.statId || el.dataset.gameId || null;
-    }
-
-    function getDefaultBadgeCount(el) {
-      if (!el) return 0;
-      const fromData = normalizeCount(el.dataset.defaultCount);
-      if (fromData !== null) return fromData;
-      return parseCountFromText(el.textContent) ?? 0;
     }
 
     async function postCount(id) {
@@ -748,10 +728,7 @@
           setGamePlay(el, fromApi);
           totalPlays += fromApi;
           hasAnyPlayValue = true;
-          continue;
         }
-
-        totalPlays += getDefaultBadgeCount(el);
       }
 
       if (!hasAnyPlayValue) {
@@ -762,7 +739,9 @@
         }
       }
 
-      setTotalPlay(totalPlays);
+      if (hasAnyPlayValue) {
+        setTotalPlay(totalPlays);
+      }
     }
 
     async function bootstrapStats() {
