@@ -422,6 +422,34 @@
       border-color: rgba(123, 47, 18, 0.32);
     }
 
+    .meeting-link {
+      color: #2f5f45;
+      background: linear-gradient(180deg, #eefaf1, #d7f0dd);
+      border-color: rgba(47, 95, 69, 0.24);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    }
+
+    .meeting-link::before {
+      content: "💬";
+      margin-right: 6px;
+      line-height: 1;
+      font-size: 0.92rem;
+    }
+
+    .meeting-link:hover,
+    .meeting-link:focus-visible {
+      filter: brightness(1.03);
+      transform: translateY(-1px);
+      border-color: rgba(47, 95, 69, 0.42);
+    }
+
+    .meeting-link.is-unavailable {
+      opacity: 0.48;
+      pointer-events: none;
+      cursor: not-allowed;
+      filter: grayscale(0.35);
+    }
+
     .ad-container {
       margin-top: 20px;
       display: grid;
@@ -609,6 +637,7 @@
               <a class="action-btn play" data-game-id="mikan_buster" href="./001_mikan_buster/src/index.html">Play</a>
               <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
               <a class="action-btn spec-link" data-game-id="mikan_buster" href="./shared/spec.html?file=spec_20260720_112402.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
+              <a class="action-btn meeting-link is-unavailable" data-game-id="mikan_buster" href="#" hidden aria-disabled="true" title="企画会議ログは未登録です">企画会議</a>
             </div>
           </div>
         </article>
@@ -624,6 +653,7 @@
               <a class="action-btn play" data-game-id="nyanko_dive" href="./002_nyanko_dive/src/index.html">Play</a>
               <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
               <a class="action-btn spec-link" data-game-id="nyanko_dive" href="./shared/spec.html?file=spec_ゲーム開発___ブラウザミニゲーム_20260722_125043.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
+              <a class="action-btn meeting-link is-unavailable" data-game-id="nyanko_dive" href="#" hidden aria-disabled="true" title="企画会議ログは未登録です">企画会議</a>
             </div>
           </div>
         </article>
@@ -639,6 +669,7 @@
               <a class="action-btn play" data-game-id="matatabi_chaos" href="./003_matatabi_chaos/src/index.html">Play</a>
               <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
               <a class="action-btn spec-link" data-game-id="matatabi_chaos" href="./shared/spec.html?file=spec_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
+              <a class="action-btn meeting-link" data-game-id="matatabi_chaos" href="./shared/meeting.html?file=meeting_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.jsonl" target="_blank" rel="noopener noreferrer">企画会議</a>
             </div>
           </div>
         </article>
@@ -667,6 +698,7 @@
     const portalPvEl = document.querySelector(".global-pv");
     const playCountEls = Array.from(document.querySelectorAll(".play-count"));
     const specLinkEls = Array.from(document.querySelectorAll(".spec-link[data-game-id]"));
+    const meetingLinkEls = Array.from(document.querySelectorAll(".meeting-link[data-game-id]"));
 
     function resolveSharedRoot() {
       if (window.location.pathname.includes("/game-projects/")) {
@@ -677,6 +709,10 @@
 
     function buildSpecViewerUrl(specFile) {
       return `${resolveSharedRoot()}/spec.html?file=${encodeURIComponent(specFile)}`;
+    }
+
+    function buildMeetingViewerUrl(meetingLogFile) {
+      return `${resolveSharedRoot()}/meeting.html?file=${encodeURIComponent(meetingLogFile)}`;
     }
 
     function getSpecRegistryPath() {
@@ -804,6 +840,40 @@
           linkEl.title = `最新仕様書: ${selectedPlan}`;
         }
       }
+
+      for (const linkEl of meetingLinkEls) {
+        const gameId = linkEl.dataset.gameId;
+        if (!gameId) continue;
+
+        const latest = latestByGameId.get(gameId);
+        const meetingLogFile =
+          latest && typeof latest.meeting_log_file === "string"
+            ? latest.meeting_log_file.trim()
+            : "";
+
+        if (!meetingLogFile) {
+          linkEl.hidden = true;
+          linkEl.classList.add("is-unavailable");
+          linkEl.setAttribute("aria-disabled", "true");
+          linkEl.removeAttribute("target");
+          linkEl.removeAttribute("rel");
+          linkEl.href = "#";
+          linkEl.title = "企画会議ログは未登録です";
+          continue;
+        }
+
+        linkEl.hidden = false;
+        linkEl.classList.remove("is-unavailable");
+        linkEl.removeAttribute("aria-disabled");
+        linkEl.target = "_blank";
+        linkEl.rel = "noopener noreferrer";
+        linkEl.href = buildMeetingViewerUrl(meetingLogFile);
+
+        const theme = typeof latest.theme === "string" ? latest.theme.trim() : "";
+        if (theme) {
+          linkEl.title = `企画会議ログ: ${theme}`;
+        }
+      }
     }
 
     function applyStats(data) {
@@ -848,6 +918,14 @@
         const specFile = url.searchParams.get("file");
         if (!specFile) continue;
         linkEl.href = buildSpecViewerUrl(specFile);
+      }
+
+      for (const linkEl of meetingLinkEls) {
+        if (linkEl.classList.contains("is-unavailable")) continue;
+        const url = new URL(linkEl.href, window.location.href);
+        const meetingFile = url.searchParams.get("file");
+        if (!meetingFile) continue;
+        linkEl.href = buildMeetingViewerUrl(meetingFile);
       }
     }
 
