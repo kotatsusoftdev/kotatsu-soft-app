@@ -608,7 +608,7 @@
               <span class="pill play-count play-count-mikan" data-stat-id="mikan" aria-live="polite">🎮 -回プレイ</span>
               <a class="action-btn play" data-game-id="mikan_buster" href="./001_mikan_buster/src/index.html">Play</a>
               <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
-              <a class="action-btn spec-link" data-game-id="mikan_buster" href="../shared/spec.html?file=spec_20260720_112402.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
+              <a class="action-btn spec-link" data-game-id="mikan_buster" href="./shared/spec.html?file=spec_20260720_112402.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
             </div>
           </div>
         </article>
@@ -623,7 +623,7 @@
               <span class="pill play-count play-count-nyanko" data-stat-id="nyanko" aria-live="polite">🎮 -回プレイ</span>
               <a class="action-btn play" data-game-id="nyanko_dive" href="./002_nyanko_dive/src/index.html">Play</a>
               <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
-              <a class="action-btn spec-link" data-game-id="nyanko_dive" href="../shared/spec.html?file=spec_ゲーム開発___ブラウザミニゲーム_20260722_125043.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
+              <a class="action-btn spec-link" data-game-id="nyanko_dive" href="./shared/spec.html?file=spec_ゲーム開発___ブラウザミニゲーム_20260722_125043.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
             </div>
           </div>
         </article>
@@ -638,7 +638,7 @@
               <span class="pill play-count play-count-matatabi" data-stat-id="matatabi_chaos" aria-live="polite">🎮 -回プレイ</span>
               <a class="action-btn play" data-game-id="matatabi_chaos" href="./003_matatabi_chaos/src/index.html">Play</a>
               <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
-              <a class="action-btn spec-link" data-game-id="matatabi_chaos" href="../shared/spec.html?file=spec_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
+              <a class="action-btn spec-link" data-game-id="matatabi_chaos" href="./shared/spec.html?file=spec_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
             </div>
           </div>
         </article>
@@ -662,12 +662,26 @@
 
   <script>
     const API_BASE_URL = "https://kotatsu-soft-stats.kotatsusoft-dev.workers.dev";
-    const SPEC_REGISTRY_PATH = "../shared/specs/spec_game_links.json";
 
     const totalPlayEl = document.getElementById("totalPlayCount");
     const portalPvEl = document.querySelector(".global-pv");
     const playCountEls = Array.from(document.querySelectorAll(".play-count"));
     const specLinkEls = Array.from(document.querySelectorAll(".spec-link[data-game-id]"));
+
+    function resolveSharedRoot() {
+      if (window.location.pathname.includes("/game-projects/")) {
+        return "../shared";
+      }
+      return "./shared";
+    }
+
+    function buildSpecViewerUrl(specFile) {
+      return `${resolveSharedRoot()}/spec.html?file=${encodeURIComponent(specFile)}`;
+    }
+
+    function getSpecRegistryPath() {
+      return `${resolveSharedRoot()}/specs/spec_game_links.json`;
+    }
 
     function formatCount(value) {
       const num = Number(value);
@@ -734,7 +748,7 @@
 
     async function fetchSpecRegistry() {
       try {
-        const response = await fetch(SPEC_REGISTRY_PATH, {
+        const response = await fetch(getSpecRegistryPath(), {
           method: "GET",
           cache: "no-store",
           headers: {
@@ -784,7 +798,7 @@
         const specFile = latest.spec_file.trim();
         if (!specFile) continue;
 
-        linkEl.href = `../shared/spec.html?file=${encodeURIComponent(specFile)}`;
+        linkEl.href = buildSpecViewerUrl(specFile);
         const selectedPlan = typeof latest.selected_plan === "string" ? latest.selected_plan.trim() : "";
         if (selectedPlan) {
           linkEl.title = `最新仕様書: ${selectedPlan}`;
@@ -828,7 +842,17 @@
       }
     }
 
+    function syncStaticSpecLinks() {
+      for (const linkEl of specLinkEls) {
+        const url = new URL(linkEl.href, window.location.href);
+        const specFile = url.searchParams.get("file");
+        if (!specFile) continue;
+        linkEl.href = buildSpecViewerUrl(specFile);
+      }
+    }
+
     async function bootstrapPortal() {
+      syncStaticSpecLinks();
       // Requirement order: increment PV first, then fetch latest counters.
       await postCount("pv");
       const [stats, specRegistry] = await Promise.all([
