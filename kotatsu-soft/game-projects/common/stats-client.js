@@ -185,7 +185,7 @@ import { incrementGamePlay, fetchPortalStats } from "../common/stats-client.js";
 
 // Increment when a run starts or when game over happens.
 incrementGamePlay("matatabi_chaos", {
-  page: "003_matatabi_chaos",
+  page: "001_matatabi_chaos",
   source: "game-over",
 });
 

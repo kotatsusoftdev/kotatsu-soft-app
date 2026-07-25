@@ -1,34 +1,7 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-07-25T04:07:39.454095+00:00",
+  "updated_at": "2026-07-25T05:03:00.000000+00:00",
   "records": [
-    {
-      "spec_file": "spec_20260720_112402.md",
-      "spec_path": "shared/specs/spec_20260720_112402.md",
-      "selected_plan": "legacy",
-      "proposal_summary": "",
-      "theme": "",
-      "created_at": "2026-07-20T11:24:02+09:00",
-      "linked_games": []
-    },
-    {
-      "spec_file": "spec_ゲーム開発___ブラウザミニゲーム_20260722_125043.md",
-      "spec_path": "shared/specs/spec_ゲーム開発___ブラウザミニゲーム_20260722_125043.md",
-      "selected_plan": "legacy",
-      "proposal_summary": "",
-      "theme": "",
-      "created_at": "2026-07-22T12:50:43+09:00",
-      "linked_games": []
-    },
-    {
-      "spec_file": "spec_パズルゲーム_バカゲー_シュール演出__20260725_101231.md",
-      "spec_path": "shared/specs/spec_パズルゲーム_バカゲー_シュール演出__20260725_101231.md",
-      "selected_plan": "パズルゲーム（バカゲー・シュール演出）",
-      "proposal_summary": "ボタンを連打ではなく地面タップで画面の底からモアイ像の顔ブロックが「ドスコイ！」と突き上げ、上のブロックを力づくで押し上げる『お辞儀テトリス』。HTML5 Canvasと素のJavaScriptで実装し、Y座標の強制上書きとシンプルな重なり判定で1日での完全完成を目指します。",
-      "theme": "テトリスみたいなゲームを作って",
-      "created_at": "2026-07-25T01:12:31.737969+00:00",
-      "linked_games": []
-    },
     {
       "spec_file": "spec_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.md",
       "spec_path": "shared/specs/spec_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.md",
@@ -42,7 +15,7 @@
       "linked_games": [
         {
           "game_id": "matatabi_chaos",
-          "game_path": "game-projects/003_matatabi_chaos/src/index.html",
+          "game_path": "game-projects/001_matatabi_chaos/src/index.html",
           "game_title": "マタタビ大合唱 ～モフモフ・カオス・タワー～",
           "linked_at": "2026-07-25T04:07:39.453209+00:00"
         }

@@ -33,7 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--game-path",
         required=True,
-        help="Workspace relative game path (e.g. game-projects/003_matatabi_chaos/src/index.html)",
+        help="Workspace relative game path (e.g. game-projects/001_matatabi_chaos/src/index.html)",
     )
     parser.add_argument(
         "--game-title",
