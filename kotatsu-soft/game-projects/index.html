@@ -292,6 +292,7 @@
     }
 
     .game-card {
+      position: relative;
       display: grid;
       gap: 12px;
       background: var(--card);
@@ -299,10 +300,31 @@
       border-radius: 18px;
       overflow: hidden;
       padding: 12px;
+      cursor: pointer;
       transition: transform 240ms ease, box-shadow 240ms ease, border-color 240ms ease;
       box-shadow:
         0 3px 0 rgba(127, 74, 46, 0.18),
         0 12px 30px rgba(88, 53, 21, 0.14);
+    }
+
+    .game-card-link {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      border-radius: inherit;
+      text-indent: -9999px;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .game-card-link:focus-visible {
+      outline: 3px solid rgba(191, 47, 47, 0.55);
+      outline-offset: -3px;
+    }
+
+    .game-card .card-actions-group {
+      position: relative;
+      z-index: 2;
     }
 
     .game-card:hover,
@@ -330,9 +352,27 @@
     }
 
     .thumb.matatabi {
-      background:
-        radial-gradient(180px 90px at 72% 14%, rgba(255, 255, 255, 0.34), transparent 66%),
-        linear-gradient(135deg, #7cb342, #aed581 48%, #fff176);
+      color: transparent;
+      text-shadow: none;
+      font-size: 0;
+      background-color: #7cb342;
+    }
+
+    .thumb.matatabi::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: url("./assets/matatabi_thumb.png");
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      transition: transform 280ms ease;
+      will-change: transform;
+    }
+
+    .game-card:hover .thumb.matatabi::before,
+    .game-card:focus-within .thumb.matatabi::before {
+      transform: scale(1.05);
     }
 
     .game-card h3 {
@@ -656,6 +696,14 @@
       line-height: 1.45;
     }
 
+    .staff-persona {
+      margin: 8px 0 0;
+      font-size: 0.72rem;
+      color: #5e4f45;
+      line-height: 1.5;
+      text-align: left;
+    }
+
     footer {
       padding: 14px 18px 18px;
       color: #755f50;
@@ -818,7 +866,12 @@
 
       <div class="game-grid">
         <article class="game-card fade-up">
-          <div class="thumb matatabi" aria-hidden="true">MATATABI CHAOS</div>
+          <a
+            class="game-card-link"
+            href="./001_matatabi_chaos/src/index.html"
+            data-game-id="matatabi_chaos"
+          >マタタビ大合唱を遊ぶ</a>
+          <div class="thumb matatabi" aria-hidden="true"></div>
           <h3>マタタビ大合唱 ～モフモフ・カオス・タワー～</h3>
           <p>マタタビで猫を誘導してモフモフを積み上げ、30匹でニャーニャー大合唱クリア！</p>
           <div class="card-footer">
@@ -870,6 +923,7 @@
             </div>
             <p class="staff-name">のぶ太社長</p>
             <p class="staff-role">アイデア・進行</p>
+            <p class="staff-persona">素人社長。ひらめきでゲームの種を投げ、みんなとコタツで楽しく進める。</p>
           </article>
           <article class="staff-card">
             <div class="staff-avatar">
@@ -884,6 +938,7 @@
             </div>
             <p class="staff-name">すずかちゃん</p>
             <p class="staff-role">企画・PM / AI</p>
+            <p class="staff-persona">かわいくて優しい、ちょっぴりおませ。みんなに寄り添いながら、たのしく前へ進む道すじをつくる。</p>
           </article>
           <article class="staff-card">
             <div class="staff-avatar">
@@ -898,6 +953,7 @@
             </div>
             <p class="staff-name">スゴ杉くん</p>
             <p class="staff-role">エンジニア / AI</p>
+            <p class="staff-persona">落ち着いた優等生。あわてず順番に整理して、無理のないやり方でみんなを支える。</p>
           </article>
           <article class="staff-card">
             <div class="staff-avatar">
@@ -912,6 +968,7 @@
             </div>
             <p class="staff-name">ヂャイアン</p>
             <p class="staff-role">マーケティング / AI</p>
+            <p class="staff-persona">オレ様のガキ大将。みんなをアッと言わせる作戦を、豪快にぶち上げるのが大好き。</p>
           </article>
         </div>
       </section>
