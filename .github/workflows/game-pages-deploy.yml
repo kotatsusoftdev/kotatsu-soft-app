@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "kotatsu-soft/game-projects/**"
+      - "kotatsu-soft/shared/**"
       - ".github/workflows/game-pages-deploy.yml"
   workflow_dispatch:
 
@@ -32,10 +33,17 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Prepare Pages artifact
+        run: |
+          mkdir -p _pages/shared/specs
+          cp -r kotatsu-soft/game-projects/. _pages/
+          cp kotatsu-soft/shared/spec.html _pages/shared/
+          cp kotatsu-soft/shared/specs/* _pages/shared/specs/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./kotatsu-soft/game-projects
+          path: ./_pages
 
       - name: Deploy to GitHub Pages
         id: deployment

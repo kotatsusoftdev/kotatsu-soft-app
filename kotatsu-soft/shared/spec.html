@@ -344,7 +344,7 @@
   <div class="scene">
     <header>
       <div class="header-row">
-        <a class="back-link" href="../game-projects/index.html">← ポータルに戻る</a>
+        <a class="back-link" id="backLink" href="../index.html">← ポータルに戻る</a>
         <div>
           <p class="page-label">KOTATSU SOFT / Spec</p>
           <p class="doc-meta" id="docMeta" aria-live="polite"></p>
@@ -449,6 +449,22 @@
       }
     }
 
+    async function resolvePortalUrl() {
+      const backLink = document.getElementById("backLink");
+      if (!backLink) return;
+
+      try {
+        const response = await fetch("../index.html", {
+          method: "HEAD",
+          cache: "no-store",
+        });
+        backLink.href = response.ok ? "../index.html" : "../game-projects/index.html";
+      } catch (_error) {
+        backLink.href = "../game-projects/index.html";
+      }
+    }
+
+    void resolvePortalUrl();
     void loadSpec();
   </script>
 </body>
