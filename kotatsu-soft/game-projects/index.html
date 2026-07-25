@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KOTATSU SOFT | Browser Games</title>
   <link rel="icon" href="./assets/channel-icon.png" type="image/png" />
+  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet" />
   <style>
     :root {
       --bg-0: #fff8ef;
@@ -114,8 +115,9 @@
     }
 
     .logo {
-      letter-spacing: 0.22em;
-      font-weight: 800;
+      font-family: "DotGothic16", sans-serif;
+      letter-spacing: 0.18em;
+      font-weight: 400;
       font-size: clamp(1.05rem, 2vw, 1.45rem);
       margin: 0;
       text-transform: uppercase;
@@ -171,9 +173,11 @@
 
     .hero h1 {
       margin: 0;
+      font-family: "DotGothic16", sans-serif;
       font-size: clamp(1.7rem, 4.4vw, 3.15rem);
-      line-height: 1.07;
-      letter-spacing: 0.01em;
+      font-weight: 400;
+      line-height: 1.2;
+      letter-spacing: 0.02em;
     }
 
     .hero p {
@@ -223,9 +227,20 @@
       border-radius: 14px;
       padding: 10px 12px;
       background: linear-gradient(180deg, rgba(255, 252, 246, 0.94), rgba(255, 237, 213, 0.88));
-      box-shadow: 0 8px 18px rgba(88, 53, 21, 0.08);
+      box-shadow:
+        0 3px 0 rgba(127, 74, 46, 0.16),
+        0 8px 18px rgba(88, 53, 21, 0.08);
       display: grid;
       gap: 4px;
+      transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+    }
+
+    .global-stat:hover {
+      transform: translateY(-2px);
+      border-color: rgba(191, 47, 47, 0.28);
+      box-shadow:
+        0 4px 0 rgba(127, 74, 46, 0.18),
+        0 12px 24px rgba(88, 53, 21, 0.12);
     }
 
     .global-stat .label {
@@ -237,10 +252,11 @@
 
     .global-stat .value {
       margin: 0;
+      font-family: "DotGothic16", sans-serif;
       font-size: clamp(1rem, 2.3vw, 1.2rem);
-      font-weight: 800;
+      font-weight: 400;
       color: #7d2f14;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.04em;
     }
 
     main {
@@ -257,7 +273,9 @@
 
     .sec-head h2 {
       margin: 0;
-      letter-spacing: 0.05em;
+      font-family: "DotGothic16", sans-serif;
+      font-weight: 400;
+      letter-spacing: 0.08em;
       font-size: clamp(1.12rem, 1.9vw, 1.5rem);
     }
 
@@ -281,15 +299,19 @@
       border-radius: 18px;
       overflow: hidden;
       padding: 12px;
-      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
-      box-shadow: 0 12px 30px rgba(88, 53, 21, 0.14);
+      transition: transform 240ms ease, box-shadow 240ms ease, border-color 240ms ease;
+      box-shadow:
+        0 3px 0 rgba(127, 74, 46, 0.18),
+        0 12px 30px rgba(88, 53, 21, 0.14);
     }
 
     .game-card:hover,
     .game-card:focus-within {
-      transform: translateY(-3px);
-      border-color: rgba(191, 47, 47, 0.45);
-      box-shadow: 0 16px 34px rgba(88, 53, 21, 0.24);
+      transform: translateY(-4px);
+      border-color: rgba(191, 47, 47, 0.4);
+      box-shadow:
+        0 5px 0 rgba(191, 47, 47, 0.22),
+        0 18px 36px rgba(88, 53, 21, 0.2);
     }
 
     .thumb {
@@ -315,7 +337,11 @@
 
     .game-card h3 {
       margin: 0;
+      font-family: "DotGothic16", sans-serif;
+      font-weight: 400;
       font-size: 1.12rem;
+      letter-spacing: 0.03em;
+      line-height: 1.35;
     }
 
     .game-card p {
@@ -386,16 +412,40 @@
       font-weight: 800;
       letter-spacing: 0.04em;
       border: 1px solid transparent;
-      transition: filter 160ms ease, transform 160ms ease, background 160ms ease, border-color 160ms ease;
+      transition: filter 160ms ease, transform 120ms ease, background 160ms ease, border-color 160ms ease, box-shadow 120ms ease;
       text-align: center;
       line-height: 1.25;
+    }
+
+    .action-btn:hover,
+    .action-btn:focus-visible {
+      transform: translateY(2px);
+    }
+
+    .action-btn:active {
+      transform: translateY(3px);
     }
 
     .action-btn.play {
       width: 100%;
       padding: 12px 16px;
       font-size: 0.95rem;
-      box-shadow: 0 8px 20px rgba(191, 47, 47, 0.28);
+      box-shadow:
+        0 4px 0 #8f2323,
+        0 8px 20px rgba(191, 47, 47, 0.28);
+    }
+
+    .action-btn.play:hover,
+    .action-btn.play:focus-visible {
+      box-shadow:
+        0 2px 0 #8f2323,
+        0 4px 14px rgba(191, 47, 47, 0.22);
+    }
+
+    .action-btn.play:active {
+      box-shadow:
+        0 1px 0 #8f2323,
+        0 2px 10px rgba(191, 47, 47, 0.18);
     }
 
     .sub-actions .action-btn {
@@ -418,50 +468,61 @@
 
     .play:hover,
     .play:focus-visible {
-      filter: brightness(1.08);
-      transform: translateY(-1px);
+      filter: brightness(1.06);
     }
 
     .youtube-link {
       color: #6b361d;
       background: linear-gradient(180deg, #fff8ef, #ffe8c9);
       border-color: rgba(123, 47, 18, 0.18);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+      box-shadow:
+        0 2px 0 rgba(123, 47, 18, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
     }
 
     .youtube-link:hover,
     .youtube-link:focus-visible {
       filter: brightness(1.03);
-      transform: translateY(-1px);
       border-color: rgba(191, 47, 47, 0.35);
+      box-shadow:
+        0 1px 0 rgba(123, 47, 18, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
     }
 
     .spec-link {
       color: #5a4638;
       background: linear-gradient(180deg, #fdf5e9, #f4e4cb);
       border-color: rgba(111, 83, 62, 0.24);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+      box-shadow:
+        0 2px 0 rgba(111, 83, 62, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.72);
     }
 
     .spec-link:hover,
     .spec-link:focus-visible {
       filter: brightness(1.03);
-      transform: translateY(-1px);
       border-color: rgba(123, 47, 18, 0.32);
+      box-shadow:
+        0 1px 0 rgba(111, 83, 62, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.72);
     }
 
     .meeting-link {
       color: #2f5f45;
       background: linear-gradient(180deg, #eefaf1, #d7f0dd);
       border-color: rgba(47, 95, 69, 0.24);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+      box-shadow:
+        0 2px 0 rgba(47, 95, 69, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.72);
     }
 
     .meeting-link:hover,
     .meeting-link:focus-visible {
       filter: brightness(1.03);
-      transform: translateY(-1px);
       border-color: rgba(47, 95, 69, 0.42);
+      box-shadow:
+        0 1px 0 rgba(47, 95, 69, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.72);
     }
 
     .meeting-link.is-unavailable {
