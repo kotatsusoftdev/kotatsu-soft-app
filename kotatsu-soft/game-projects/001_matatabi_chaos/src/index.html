@@ -118,17 +118,23 @@
       const H = canvas.height;
       const FLOOR_Y = H - 36;
       const CEILING_Y = 52;
-      const GRAVITY = 520;
-      const CLEAR_COUNT = 30;
-      const TIME_LIMIT = 90;
-      const SPAWN_INTERVAL = 2.4;
+      const GRAVITY = 320;
+      const MAX_FALL_SPEED = 230;
+      const CAT_HEIGHT = 30;
+      const OVERLAP_RATIO = 0.2;
+      const STACK_UNIT = CAT_HEIGHT * (1 - OVERLAP_RATIO);
+      const TIME_LIMIT = 30;
+      const FEVER_DURATION = 10;
+      const SPAWN_INTERVAL = 1.4;
+      const FEVER_SPAWN_INTERVAL = 0.9;
       const MATATABI_DURATION = 5.5;
       const CEILING_FAIL_TIME = 2.2;
+      const CAT_WALK_SPEED = 150;
+      const GIANT_SCALE = 2;
 
       const STATE = {
         TITLE: "TITLE",
         PLAYING: "PLAYING",
-        CHORUS: "CHORUS",
         RESULT: "RESULT",
         GAMEOVER: "GAMEOVER",
       };
@@ -149,10 +155,9 @@
       let timeLeft = TIME_LIMIT;
       let spawnTimer = 0;
       let ceilingTimer = 0;
-      let chorusTimer = 0;
+      let feverActive = false;
       let resultTimer = 0;
       let lastTime = 0;
-      let chaosPhase = 0;
       let audioCtx = null;
       let chorusVoices = [];
 
@@ -250,15 +255,43 @@
         }
       }
 
+      function landingSurfaceY(cat) {
+        let surface = FLOOR_Y;
+        const halfW = cat.w / 2;
+        const minRestY = cat.y - 6;
+        for (const other of cats) {
+          if (other === cat || !other.onGround) continue;
+          const overlaps = Math.abs(other.x - cat.x) < (halfW + other.w / 2) * 0.82;
+          if (!overlaps) continue;
+
+          const candidateRestY = other.y - cat.h * (1 - OVERLAP_RATIO);
+          if (candidateRestY < minRestY) continue;
+
+          if (other.y < surface) surface = other.y;
+        }
+        return surface;
+      }
+
+      function currentPileLevels() {
+        let minTopY = FLOOR_Y;
+        for (const cat of cats) {
+          if (cat.onGround && cat.y < minTopY) minTopY = cat.y;
+        }
+        const heightPx = Math.max(0, FLOOR_Y - minTopY);
+        return Math.round(heightPx / STACK_UNIT);
+      }
+
       class Cat {
-        constructor(x) {
+        constructor(x, isGiant) {
           this.x = x;
           this.y = -30;
           this.vx = (Math.random() - 0.5) * 40;
-          this.vy = 40 + Math.random() * 30;
-          this.r = 18;
-          this.w = 36;
-          this.h = 30;
+          this.vy = 20 + Math.random() * 15;
+          this.giant = !!isGiant;
+          const s = this.giant ? GIANT_SCALE : 1;
+          this.r = 18 * s;
+          this.w = 36 * s;
+          this.h = CAT_HEIGHT * s;
           this.facing = Math.random() < 0.5 ? -1 : 1;
           this.wobble = Math.random() * Math.PI * 2;
           this.color = CAT_COLORS[Math.floor(Math.random() * CAT_COLORS.length)];
@@ -273,28 +306,30 @@
 
         update(dt) {
           this.wobble += dt * 8;
-          const m = this.nearestMatatabi();
+          const m = this.onGround ? this.nearestMatatabi() : null;
 
           if (m) {
             const dx = m.x - this.x;
             const dy = m.y - this.y;
             const dist = Math.hypot(dx, dy) || 1;
-            const pull = this.onGround ? 95 : 65;
-            this.vx += (dx / dist) * pull * dt;
-            this.vy += (dy / dist) * pull * 0.35 * dt;
+            const desiredVx = (dx / dist) * CAT_WALK_SPEED;
+            this.vx += (desiredVx - this.vx) * Math.min(1, 12 * dt);
 
             if (dist < this.r + 14) {
               m.consumed = true;
               playMeow(520 + Math.random() * 120, 0.14, 0.06);
             }
           } else if (this.onGround) {
-            this.vx *= 0.92;
+            this.vx *= Math.exp(-7 * dt);
           }
 
           this.vy += GRAVITY * dt;
-          this.vx *= this.onGround ? 0.88 : 0.995;
+          if (this.vy > MAX_FALL_SPEED) this.vy = MAX_FALL_SPEED;
+          if (!this.onGround) {
+            this.vx *= Math.exp(-0.4 * dt);
+          }
 
-          const maxVx = 140;
+          const maxVx = this.onGround ? CAT_WALK_SPEED * 1.15 : 160;
           this.vx = Math.max(-maxVx, Math.min(maxVx, this.vx));
 
           this.x += this.vx * dt;
@@ -302,16 +337,17 @@
 
           if (this.x < this.r) {
             this.x = this.r;
-            this.vx *= -0.35;
+            this.vx *= -0.3;
           } else if (this.x > W - this.r) {
             this.x = W - this.r;
-            this.vx *= -0.35;
+            this.vx *= -0.3;
           }
 
-          const floorTop = FLOOR_Y - this.h + 6;
-          if (this.y >= floorTop) {
+          const surfaceTopY = landingSurfaceY(this);
+          const restY = surfaceTopY - this.h * (1 - OVERLAP_RATIO);
+          if (this.y >= restY) {
             if (!this.landedOnce && this.vy > 80) playLandMeow();
-            this.y = floorTop;
+            this.y = restY;
             this.vy *= -0.08;
             if (Math.abs(this.vy) < 30) this.vy = 0;
             this.onGround = true;
@@ -328,22 +364,19 @@
         resolveWithOthers(others) {
           for (const other of others) {
             if (other === this) continue;
+            if (Math.abs(this.y - other.y) > this.h * 0.6) continue;
+
             const dx = other.x - this.x;
-            const dy = other.y - this.y;
-            const minDist = this.r + other.r - 2;
-            const dist = Math.hypot(dx, dy);
-            if (dist > 0 && dist < minDist) {
+            const minDist = (this.w + other.w) / 2 - 4;
+            const dist = Math.abs(dx);
+
+            if (dist < minDist) {
+              const dir = dx >= 0 ? 1 : -1;
               const overlap = minDist - dist;
-              const nx = dx / dist;
-              const ny = dy / dist;
-              this.x -= nx * overlap * 0.55;
-              this.y -= ny * overlap * 0.55;
-              other.x += nx * overlap * 0.45;
-              other.y += ny * overlap * 0.45;
-              this.vx -= nx * overlap * 2.2;
-              other.vx += nx * overlap * 2.2;
-              this.vy -= ny * overlap * 1.4;
-              other.vy += ny * overlap * 1.4;
+              this.x -= dir * overlap * 0.5;
+              other.x += dir * overlap * 0.5;
+              this.vx -= dir * overlap * 1.6;
+              other.vx += dir * overlap * 1.6;
             }
           }
         }
@@ -354,42 +387,43 @@
           const y = this.y;
           const w = this.w;
           const h = this.h;
+          const k = w / 36;
           const dir = this.facing;
-          const bob = Math.sin(this.wobble) * 1.5;
+          const bob = Math.sin(this.wobble) * 1.5 * k;
 
           ctx.save();
           ctx.translate(x, y + bob);
           ctx.scale(dir, 1);
 
           ctx.fillStyle = body;
-          roundedRect(ctx, -w / 2, 0, w, h, 10);
+          roundedRect(ctx, -w / 2, 0, w, h, 10 * k);
           ctx.fill();
 
           ctx.fillStyle = ear;
-          tri(ctx, -w / 2 + 8, 4, -w / 2 + 16, -10, -w / 2 + 24, 4);
-          tri(ctx, w / 2 - 8, 4, w / 2 - 16, -10, w / 2 - 24, 4);
+          tri(ctx, -w / 2 + 1 * k, 7 * k, -w / 2 + 8 * k, -12 * k, -w / 2 + 15 * k, 7 * k);
+          tri(ctx, w / 2 - 1 * k, 7 * k, w / 2 - 8 * k, -12 * k, w / 2 - 15 * k, 7 * k);
 
           ctx.fillStyle = "#2f2438";
           ctx.beginPath();
-          ctx.arc(-8, 14, 3, 0, Math.PI * 2);
-          ctx.arc(8, 14, 3, 0, Math.PI * 2);
+          ctx.arc(-8 * k, 14 * k, 3 * k, 0, Math.PI * 2);
+          ctx.arc(8 * k, 14 * k, 3 * k, 0, Math.PI * 2);
           ctx.fill();
 
           ctx.fillStyle = "#ff7b93";
           ctx.globalAlpha = 0.55;
           ctx.beginPath();
-          ctx.arc(-12, 18, 3.2, 0, Math.PI * 2);
-          ctx.arc(12, 18, 3.2, 0, Math.PI * 2);
+          ctx.arc(-12 * k, 18 * k, 3.2 * k, 0, Math.PI * 2);
+          ctx.arc(12 * k, 18 * k, 3.2 * k, 0, Math.PI * 2);
           ctx.fill();
           ctx.globalAlpha = 1;
 
           ctx.strokeStyle = "#2f2438";
-          ctx.lineWidth = 1.3;
+          ctx.lineWidth = 1.3 * k;
           ctx.beginPath();
-          ctx.moveTo(0, 18);
-          ctx.lineTo(-4, 22);
-          ctx.moveTo(0, 18);
-          ctx.lineTo(4, 22);
+          ctx.moveTo(0, 18 * k);
+          ctx.lineTo(-4 * k, 22 * k);
+          ctx.moveTo(0, 18 * k);
+          ctx.lineTo(4 * k, 22 * k);
           ctx.stroke();
 
           ctx.restore();
@@ -403,9 +437,8 @@
         timeLeft = TIME_LIMIT;
         spawnTimer = 0;
         ceilingTimer = 0;
-        chorusTimer = 0;
+        feverActive = false;
         resultTimer = 0;
-        chaosPhase = 0;
         stopChorusVoices();
       }
 
@@ -418,10 +451,10 @@
         state = STATE.PLAYING;
       }
 
-      function spawnCat() {
-        const margin = 24;
+      function spawnCat(isGiant) {
+        const margin = isGiant ? 48 : 24;
         const x = margin + Math.random() * (W - margin * 2);
-        cats.push(new Cat(x));
+        cats.push(new Cat(x, isGiant));
       }
 
       function canvasPoint(clientX, clientY) {
@@ -436,30 +469,28 @@
 
       function placeMatatabi(x, y) {
         if (state !== STATE.PLAYING) return;
-        if (matatabi && matatabi.active) return;
         y = Math.max(CEILING_Y + 20, Math.min(y, FLOOR_Y - 40));
         x = Math.max(20, Math.min(W - 20, x));
         matatabi = new Matatabi(x, y);
         playMeow(680, 0.08, 0.04);
       }
 
-      function anyCatAboveCeiling() {
+      function anyCatOutOfControlAboveCeiling() {
         for (const cat of cats) {
-          if (cat.y < CEILING_Y) return true;
+          if (!cat.onGround && cat.y < CEILING_Y) return true;
         }
         return false;
       }
 
-      function startChorus(reason) {
-        state = STATE.CHORUS;
-        chorusTimer = 0;
-        chaosPhase = 0;
+      function onFeverStart() {
         ensureAudio();
         stopChorusVoices();
 
-        for (let i = 0; i < 12; i++) {
+        playMeow(180, 0.5, 0.09);
+
+        for (let i = 0; i < 8; i++) {
           setTimeout(() => {
-            playMeow(220 + i * 55 + Math.random() * 40, 0.35 + Math.random() * 0.2, 0.07);
+            playMeow(220 + i * 55 + Math.random() * 40, 0.3 + Math.random() * 0.15, 0.06);
           }, i * 90);
         }
 
@@ -469,7 +500,7 @@
             const gain = audioCtx.createGain();
             osc.type = i % 2 === 0 ? "triangle" : "square";
             osc.frequency.value = 180 + i * 70;
-            gain.gain.value = 0.015;
+            gain.gain.value = 0.012;
             osc.connect(gain);
             gain.connect(audioCtx.destination);
             osc.start();
@@ -512,7 +543,6 @@
           startGame();
           return;
         }
-        if (state === STATE.CHORUS) return;
 
         placeMatatabi(pt.x, pt.y);
       }
@@ -536,10 +566,18 @@
 
       function updatePlaying(dt) {
         timeLeft -= dt;
+
+        const inFever = timeLeft <= FEVER_DURATION;
+        if (inFever && !feverActive) {
+          feverActive = true;
+          onFeverStart();
+        }
+
         spawnTimer -= dt;
         if (spawnTimer <= 0) {
-          spawnCat();
-          spawnTimer = SPAWN_INTERVAL * (0.75 + Math.random() * 0.5);
+          spawnCat(inFever);
+          const interval = inFever ? FEVER_SPAWN_INTERVAL : SPAWN_INTERVAL;
+          spawnTimer = interval * (0.75 + Math.random() * 0.5);
         }
 
         if (matatabi) {
@@ -555,9 +593,9 @@
           cats[i].resolveWithOthers(cats);
         }
 
-        score = cats.length;
+        score = currentPileLevels();
 
-        if (anyCatAboveCeiling()) {
+        if (anyCatOutOfControlAboveCeiling()) {
           ceilingTimer += dt;
         } else {
           ceilingTimer = 0;
@@ -568,33 +606,13 @@
           return;
         }
 
-        if (score >= CLEAR_COUNT || timeLeft <= 0) {
-          startChorus(score >= CLEAR_COUNT ? "clear" : "time");
-        }
-      }
-
-      function updateChorus(dt) {
-        chorusTimer += dt;
-        chaosPhase += dt * 3;
-
-        if (Math.random() < dt * 8) {
-          playMeow(200 + Math.random() * 600, 0.15 + Math.random() * 0.15, 0.05);
-        }
-
-        for (const cat of cats) {
-          cat.vx += (Math.random() - 0.5) * 40 * dt;
-          cat.vy += (Math.random() - 0.5) * 20 * dt;
-          cat.update(dt);
-        }
-
-        if (chorusTimer >= 4.5) {
+        if (timeLeft <= 0) {
           goResult(true);
         }
       }
 
       function update(dt) {
         if (state === STATE.PLAYING) updatePlaying(dt);
-        else if (state === STATE.CHORUS) updateChorus(dt);
       }
 
       function drawRoom() {
@@ -640,9 +658,9 @@
         ctx.font = "bold 12px Trebuchet MS, sans-serif";
         ctx.textAlign = "left";
         ctx.textBaseline = "top";
-        ctx.fillText("積んだ猫", 20, 16);
+        ctx.fillText("つみあげ高さ", 20, 16);
         ctx.font = "bold 22px Trebuchet MS, sans-serif";
-        ctx.fillText(`${score} / ${CLEAR_COUNT}`, 20, 30);
+        ctx.fillText(`${score}段`, 20, 30);
 
         const gaugeW = 120;
         const gx = W - gaugeW - 16;
@@ -655,13 +673,13 @@
         ctx.fillStyle = "#6b4a3a";
         ctx.font = "bold 12px Trebuchet MS, sans-serif";
         ctx.textAlign = "left";
-        ctx.fillText("残り時間", gx + 10, 16);
+        ctx.fillText(timeLeft <= FEVER_DURATION ? "フィーバー残り" : "残り時間", gx + 10, 16);
 
-        const ratio = Math.max(0, timeLeft / TIME_LIMIT);
+        const ratio = Math.max(0, timeLeft / (timeLeft <= FEVER_DURATION ? FEVER_DURATION : TIME_LIMIT));
         ctx.fillStyle = "rgba(180, 140, 110, 0.25)";
         roundedRect(ctx, gx + 10, 32, gaugeW - 20, 10, 5);
         ctx.fill();
-        ctx.fillStyle = ratio > 0.25 ? "#8bc34a" : "#ef5350";
+        ctx.fillStyle = timeLeft <= FEVER_DURATION ? "#e8892f" : (ratio > 0.25 ? "#8bc34a" : "#ef5350");
         roundedRect(ctx, gx + 10, 32, (gaugeW - 20) * ratio, 10, 5);
         ctx.fill();
 
@@ -689,7 +707,7 @@
         ctx.font = "14px Trebuchet MS, sans-serif";
         ctx.fillStyle = "#7a5a48";
         ctx.fillText("マタタビを置いて猫を誘導！", W / 2, 248);
-        ctx.fillText(`${CLEAR_COUNT}匹で大合唱クリア`, W / 2, 268);
+        ctx.fillText(`残り${FEVER_DURATION}秒はでかい猫フィーバー！`, W / 2, 268);
 
         const pulse = 0.55 + Math.sin(performance.now() * 0.008) * 0.45;
         ctx.globalAlpha = pulse;
@@ -740,27 +758,14 @@
         }
       }
 
-      function drawChaosEffects(t) {
-        ctx.save();
-        ctx.globalAlpha = 0.12 + Math.sin(chaosPhase) * 0.06;
-        for (let i = 0; i < 8; i++) {
-          ctx.fillStyle = `hsl(${(t * 0.05 + i * 40) % 360}, 80%, 65%)`;
-          ctx.beginPath();
-          ctx.arc(
-            (Math.sin(t * 0.002 + i) * 0.5 + 0.5) * W,
-            (Math.cos(t * 0.0015 + i * 1.7) * 0.5 + 0.5) * H,
-            30 + i * 8,
-            0,
-            Math.PI * 2
-          );
-          ctx.fill();
-        }
-        ctx.restore();
-
+      function drawFeverOverlay(t) {
+        const pulse = 0.7 + Math.sin(t * 0.012) * 0.3;
+        ctx.globalAlpha = pulse;
         ctx.textAlign = "center";
-        ctx.font = "bold 28px Trebuchet MS, sans-serif";
-        ctx.fillStyle = `hsl(${(t * 0.08) % 360}, 85%, 58%)`;
-        ctx.fillText("ニャーニャー大合唱！", W / 2, 90 + Math.sin(t * 0.01) * 6);
+        ctx.font = "bold 16px Trebuchet MS, sans-serif";
+        ctx.fillStyle = `hsl(${(t * 0.15) % 360}, 85%, 55%)`;
+        ctx.fillText(`でかい猫フィーバー中！ 残り${Math.ceil(Math.max(0, timeLeft))}秒`, W / 2, 100);
+        ctx.globalAlpha = 1;
       }
 
       function render(t) {
@@ -774,18 +779,19 @@
           cat.draw();
         }
 
-        if (state === STATE.PLAYING || state === STATE.CHORUS) {
+        if (state === STATE.PLAYING) {
           drawHUD();
+          if (timeLeft <= FEVER_DURATION) {
+            drawFeverOverlay(t);
+          }
         }
 
         if (state === STATE.TITLE) {
           drawTitle();
-        } else if (state === STATE.CHORUS) {
-          drawChaosEffects(t);
         } else if (state === STATE.RESULT) {
-          drawOverlay("CAOS CLEAR!", `最終スコア: ${score}匹`, "#ffd54f", true);
+          drawOverlay("CAOS CLEAR!", `つみあげ高さ ${score}段`, "#ffd54f", true);
         } else if (state === STATE.GAMEOVER) {
-          drawOverlay("GAME OVER", `猫が天井を超えました (${score}匹)`, "#ef5350", true);
+          drawOverlay("GAME OVER", `猫が制御不能で天井へ… (つみあげ高さ ${score}段)`, "#ef5350", true);
         }
       }
 
