@@ -1,0 +1,825 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>マタタビ大合唱 ～モフモフ・カオス・タワー～</title>
+  <style>
+    :root {
+      --wall: #f5dcc8;
+      --floor: #e8b896;
+      --ink: #4a3228;
+      --accent: #7cb342;
+      --warm: #fff8ef;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(255, 255, 255, 0.55), transparent 28%),
+        linear-gradient(165deg, #fff6ea 0%, #ffe3c4 55%, #ffd5a8 100%);
+      color: var(--ink);
+      font-family: "Trebuchet MS", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    .wrap {
+      width: min(94vw, 420px);
+      display: grid;
+      gap: 10px;
+      justify-items: center;
+    }
+
+    .topbar {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .home-link {
+      text-decoration: none;
+      color: #6b4a3a;
+      border: 1px solid rgba(107, 74, 58, 0.28);
+      background: rgba(255, 250, 242, 0.82);
+      border-radius: 999px;
+      padding: 6px 11px;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      transition: background 140ms ease, transform 140ms ease;
+    }
+
+    .home-link:hover,
+    .home-link:focus-visible {
+      background: rgba(255, 255, 255, 0.95);
+      transform: translateY(-1px);
+    }
+
+    .brand {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: #8a5f4a;
+      opacity: 0.95;
+    }
+
+    canvas {
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      border: 2px solid rgba(122, 82, 58, 0.22);
+      border-radius: 16px;
+      background: #000;
+      box-shadow:
+        0 16px 44px rgba(84, 44, 13, 0.22),
+        0 0 0 1px rgba(255, 255, 255, 0.35) inset;
+      display: block;
+      cursor: crosshair;
+    }
+
+    .hint {
+      font-size: 12px;
+      letter-spacing: 0.03em;
+      color: #7a5a48;
+      opacity: 0.9;
+      text-align: center;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="home-link" href="../../index.html">KOTATSU SOFT へ戻る</a>
+      <div class="brand">MATATABI CHAOS</div>
+    </div>
+    <canvas id="game" width="400" height="600" aria-label="マタタビ大合唱"></canvas>
+    <div class="hint">クリック/タップでマタタビ配置 ・ Rキーでリトライ</div>
+  </div>
+
+  <script src="../../common/stats.js"></script>
+  <script>
+    (() => {
+      "use strict";
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+
+      const W = canvas.width;
+      const H = canvas.height;
+      const FLOOR_Y = H - 36;
+      const CEILING_Y = 52;
+      const GRAVITY = 520;
+      const CLEAR_COUNT = 30;
+      const TIME_LIMIT = 90;
+      const SPAWN_INTERVAL = 2.4;
+      const MATATABI_DURATION = 5.5;
+      const CEILING_FAIL_TIME = 2.2;
+
+      const STATE = {
+        TITLE: "TITLE",
+        PLAYING: "PLAYING",
+        CHORUS: "CHORUS",
+        RESULT: "RESULT",
+        GAMEOVER: "GAMEOVER",
+      };
+
+      const CAT_COLORS = [
+        { body: "#ffd452", ear: "#ffbd35" },
+        { body: "#ffb07a", ear: "#ff914d" },
+        { body: "#c8e6ff", ear: "#9cc7f0" },
+        { body: "#d8f5a2", ear: "#b8e06a" },
+        { body: "#f5c2ff", ear: "#e59cf5" },
+        { body: "#ffe08a", ear: "#ffc94d" },
+      ];
+
+      let state = STATE.TITLE;
+      let cats = [];
+      let matatabi = null;
+      let score = 0;
+      let timeLeft = TIME_LIMIT;
+      let spawnTimer = 0;
+      let ceilingTimer = 0;
+      let chorusTimer = 0;
+      let resultTimer = 0;
+      let lastTime = 0;
+      let chaosPhase = 0;
+      let audioCtx = null;
+      let chorusVoices = [];
+
+      const sendPlayCount = window.KotatsuStats && window.KotatsuStats.sendPlayCount;
+
+      function ensureAudio() {
+        if (!audioCtx) {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (Ctx) audioCtx = new Ctx();
+        }
+        if (audioCtx && audioCtx.state === "suspended") {
+          audioCtx.resume().catch(() => {});
+        }
+      }
+
+      function playMeow(pitch = 440, duration = 0.18, volume = 0.08) {
+        if (!audioCtx) return;
+        const t0 = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(pitch, t0);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(80, pitch * 0.55), t0 + duration * 0.75);
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(volume, t0 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(t0);
+        osc.stop(t0 + duration + 0.02);
+      }
+
+      function playLandMeow() {
+        playMeow(320 + Math.random() * 180, 0.12, 0.05);
+      }
+
+      class Matatabi {
+        constructor(x, y) {
+          this.x = x;
+          this.y = y;
+          this.life = MATATABI_DURATION;
+          this.pulse = Math.random() * Math.PI * 2;
+          this.consumed = false;
+        }
+
+        update(dt) {
+          this.life -= dt;
+          this.pulse += dt * 5;
+        }
+
+        get active() {
+          return this.life > 0 && !this.consumed;
+        }
+
+        draw(t) {
+          const glow = 0.55 + Math.sin(this.pulse) * 0.25;
+          ctx.save();
+          ctx.translate(this.x, this.y);
+
+          const rad = ctx.createRadialGradient(0, 0, 2, 0, 0, 28);
+          rad.addColorStop(0, `rgba(180, 230, 90, ${0.35 * glow})`);
+          rad.addColorStop(1, "rgba(180, 230, 90, 0)");
+          ctx.fillStyle = rad;
+          ctx.beginPath();
+          ctx.arc(0, 0, 28, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = "#5d8f2a";
+          ctx.lineWidth = 2;
+          ctx.lineCap = "round";
+          for (let i = 0; i < 5; i++) {
+            const a = (Math.PI * 2 * i) / 5 + t * 0.001;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.quadraticCurveTo(
+              Math.cos(a) * 8,
+              Math.sin(a) * 8 - 4,
+              Math.cos(a) * 16,
+              Math.sin(a) * 16 - 10
+            );
+            ctx.stroke();
+          }
+
+          ctx.fillStyle = "#8bc34a";
+          ctx.beginPath();
+          ctx.arc(0, 0, 5, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = "#fff";
+          ctx.font = "bold 11px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("マタタビ", 0, 24);
+          ctx.restore();
+        }
+      }
+
+      class Cat {
+        constructor(x) {
+          this.x = x;
+          this.y = -30;
+          this.vx = (Math.random() - 0.5) * 40;
+          this.vy = 40 + Math.random() * 30;
+          this.r = 18;
+          this.w = 36;
+          this.h = 30;
+          this.facing = Math.random() < 0.5 ? -1 : 1;
+          this.wobble = Math.random() * Math.PI * 2;
+          this.color = CAT_COLORS[Math.floor(Math.random() * CAT_COLORS.length)];
+          this.onGround = false;
+          this.landedOnce = false;
+        }
+
+        nearestMatatabi() {
+          if (!matatabi || !matatabi.active) return null;
+          return matatabi;
+        }
+
+        update(dt) {
+          this.wobble += dt * 8;
+          const m = this.nearestMatatabi();
+
+          if (m) {
+            const dx = m.x - this.x;
+            const dy = m.y - this.y;
+            const dist = Math.hypot(dx, dy) || 1;
+            const pull = this.onGround ? 95 : 65;
+            this.vx += (dx / dist) * pull * dt;
+            this.vy += (dy / dist) * pull * 0.35 * dt;
+
+            if (dist < this.r + 14) {
+              m.consumed = true;
+              playMeow(520 + Math.random() * 120, 0.14, 0.06);
+            }
+          } else if (this.onGround) {
+            this.vx *= 0.92;
+          }
+
+          this.vy += GRAVITY * dt;
+          this.vx *= this.onGround ? 0.88 : 0.995;
+
+          const maxVx = 140;
+          this.vx = Math.max(-maxVx, Math.min(maxVx, this.vx));
+
+          this.x += this.vx * dt;
+          this.y += this.vy * dt;
+
+          if (this.x < this.r) {
+            this.x = this.r;
+            this.vx *= -0.35;
+          } else if (this.x > W - this.r) {
+            this.x = W - this.r;
+            this.vx *= -0.35;
+          }
+
+          const floorTop = FLOOR_Y - this.h + 6;
+          if (this.y >= floorTop) {
+            if (!this.landedOnce && this.vy > 80) playLandMeow();
+            this.y = floorTop;
+            this.vy *= -0.08;
+            if (Math.abs(this.vy) < 30) this.vy = 0;
+            this.onGround = true;
+            this.landedOnce = true;
+          } else {
+            this.onGround = false;
+          }
+
+          if (Math.abs(this.vx) > 8) {
+            this.facing = this.vx > 0 ? 1 : -1;
+          }
+        }
+
+        resolveWithOthers(others) {
+          for (const other of others) {
+            if (other === this) continue;
+            const dx = other.x - this.x;
+            const dy = other.y - this.y;
+            const minDist = this.r + other.r - 2;
+            const dist = Math.hypot(dx, dy);
+            if (dist > 0 && dist < minDist) {
+              const overlap = minDist - dist;
+              const nx = dx / dist;
+              const ny = dy / dist;
+              this.x -= nx * overlap * 0.55;
+              this.y -= ny * overlap * 0.55;
+              other.x += nx * overlap * 0.45;
+              other.y += ny * overlap * 0.45;
+              this.vx -= nx * overlap * 2.2;
+              other.vx += nx * overlap * 2.2;
+              this.vy -= ny * overlap * 1.4;
+              other.vy += ny * overlap * 1.4;
+            }
+          }
+        }
+
+        draw() {
+          const { body, ear } = this.color;
+          const x = this.x;
+          const y = this.y;
+          const w = this.w;
+          const h = this.h;
+          const dir = this.facing;
+          const bob = Math.sin(this.wobble) * 1.5;
+
+          ctx.save();
+          ctx.translate(x, y + bob);
+          ctx.scale(dir, 1);
+
+          ctx.fillStyle = body;
+          roundedRect(ctx, -w / 2, 0, w, h, 10);
+          ctx.fill();
+
+          ctx.fillStyle = ear;
+          tri(ctx, -w / 2 + 8, 4, -w / 2 + 16, -10, -w / 2 + 24, 4);
+          tri(ctx, w / 2 - 8, 4, w / 2 - 16, -10, w / 2 - 24, 4);
+
+          ctx.fillStyle = "#2f2438";
+          ctx.beginPath();
+          ctx.arc(-8, 14, 3, 0, Math.PI * 2);
+          ctx.arc(8, 14, 3, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = "#ff7b93";
+          ctx.globalAlpha = 0.55;
+          ctx.beginPath();
+          ctx.arc(-12, 18, 3.2, 0, Math.PI * 2);
+          ctx.arc(12, 18, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+
+          ctx.strokeStyle = "#2f2438";
+          ctx.lineWidth = 1.3;
+          ctx.beginPath();
+          ctx.moveTo(0, 18);
+          ctx.lineTo(-4, 22);
+          ctx.moveTo(0, 18);
+          ctx.lineTo(4, 22);
+          ctx.stroke();
+
+          ctx.restore();
+        }
+      }
+
+      function resetGame() {
+        cats = [];
+        matatabi = null;
+        score = 0;
+        timeLeft = TIME_LIMIT;
+        spawnTimer = 0;
+        ceilingTimer = 0;
+        chorusTimer = 0;
+        resultTimer = 0;
+        chaosPhase = 0;
+        stopChorusVoices();
+      }
+
+      function startGame() {
+        ensureAudio();
+        try {
+          if (typeof sendPlayCount === "function") sendPlayCount("matatabi_chaos");
+        } catch (_error) {}
+        resetGame();
+        state = STATE.PLAYING;
+      }
+
+      function spawnCat() {
+        const margin = 24;
+        const x = margin + Math.random() * (W - margin * 2);
+        cats.push(new Cat(x));
+      }
+
+      function canvasPoint(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        const sx = W / rect.width;
+        const sy = H / rect.height;
+        return {
+          x: (clientX - rect.left) * sx,
+          y: (clientY - rect.top) * sy,
+        };
+      }
+
+      function placeMatatabi(x, y) {
+        if (state !== STATE.PLAYING) return;
+        if (matatabi && matatabi.active) return;
+        y = Math.max(CEILING_Y + 20, Math.min(y, FLOOR_Y - 40));
+        x = Math.max(20, Math.min(W - 20, x));
+        matatabi = new Matatabi(x, y);
+        playMeow(680, 0.08, 0.04);
+      }
+
+      function anyCatAboveCeiling() {
+        for (const cat of cats) {
+          if (cat.y < CEILING_Y) return true;
+        }
+        return false;
+      }
+
+      function startChorus(reason) {
+        state = STATE.CHORUS;
+        chorusTimer = 0;
+        chaosPhase = 0;
+        ensureAudio();
+        stopChorusVoices();
+
+        for (let i = 0; i < 12; i++) {
+          setTimeout(() => {
+            playMeow(220 + i * 55 + Math.random() * 40, 0.35 + Math.random() * 0.2, 0.07);
+          }, i * 90);
+        }
+
+        if (audioCtx) {
+          for (let i = 0; i < 6; i++) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = i % 2 === 0 ? "triangle" : "square";
+            osc.frequency.value = 180 + i * 70;
+            gain.gain.value = 0.015;
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            chorusVoices.push({ osc, gain });
+          }
+        }
+      }
+
+      function stopChorusVoices() {
+        for (const v of chorusVoices) {
+          try {
+            v.gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.08);
+            v.osc.stop(audioCtx.currentTime + 0.1);
+          } catch (_e) {}
+        }
+        chorusVoices = [];
+      }
+
+      function goResult(isClear) {
+        stopChorusVoices();
+        state = isClear ? STATE.RESULT : STATE.GAMEOVER;
+        resultTimer = 0;
+      }
+
+      function retry() {
+        resetGame();
+        state = STATE.TITLE;
+      }
+
+      function onPointerDown(e) {
+        e.preventDefault();
+        ensureAudio();
+        const pt = canvasPoint(e.clientX, e.clientY);
+
+        if (state === STATE.TITLE) {
+          startGame();
+          return;
+        }
+        if (state === STATE.RESULT || state === STATE.GAMEOVER) {
+          startGame();
+          return;
+        }
+        if (state === STATE.CHORUS) return;
+
+        placeMatatabi(pt.x, pt.y);
+      }
+
+      function onKeyDown(e) {
+        if (e.code === "KeyR") {
+          e.preventDefault();
+          retry();
+          return;
+        }
+        if (e.code === "Space" && !e.repeat) {
+          e.preventDefault();
+          if (state === STATE.TITLE || state === STATE.RESULT || state === STATE.GAMEOVER) {
+            startGame();
+          }
+        }
+      }
+
+      canvas.addEventListener("pointerdown", onPointerDown, { passive: false });
+      window.addEventListener("keydown", onKeyDown, { passive: false });
+
+      function updatePlaying(dt) {
+        timeLeft -= dt;
+        spawnTimer -= dt;
+        if (spawnTimer <= 0) {
+          spawnCat();
+          spawnTimer = SPAWN_INTERVAL * (0.75 + Math.random() * 0.5);
+        }
+
+        if (matatabi) {
+          matatabi.update(dt);
+          if (!matatabi.active) matatabi = null;
+        }
+
+        for (const cat of cats) {
+          cat.update(dt);
+        }
+
+        for (let i = 0; i < cats.length; i++) {
+          cats[i].resolveWithOthers(cats);
+        }
+
+        score = cats.length;
+
+        if (anyCatAboveCeiling()) {
+          ceilingTimer += dt;
+        } else {
+          ceilingTimer = 0;
+        }
+
+        if (ceilingTimer >= CEILING_FAIL_TIME) {
+          goResult(false);
+          return;
+        }
+
+        if (score >= CLEAR_COUNT || timeLeft <= 0) {
+          startChorus(score >= CLEAR_COUNT ? "clear" : "time");
+        }
+      }
+
+      function updateChorus(dt) {
+        chorusTimer += dt;
+        chaosPhase += dt * 3;
+
+        if (Math.random() < dt * 8) {
+          playMeow(200 + Math.random() * 600, 0.15 + Math.random() * 0.15, 0.05);
+        }
+
+        for (const cat of cats) {
+          cat.vx += (Math.random() - 0.5) * 40 * dt;
+          cat.vy += (Math.random() - 0.5) * 20 * dt;
+          cat.update(dt);
+        }
+
+        if (chorusTimer >= 4.5) {
+          goResult(true);
+        }
+      }
+
+      function update(dt) {
+        if (state === STATE.PLAYING) updatePlaying(dt);
+        else if (state === STATE.CHORUS) updateChorus(dt);
+      }
+
+      function drawRoom() {
+        const wallGrad = ctx.createLinearGradient(0, 0, 0, H);
+        wallGrad.addColorStop(0, "#fff1e4");
+        wallGrad.addColorStop(0.72, "#f8dcc6");
+        wallGrad.addColorStop(1, "#e8b992");
+        ctx.fillStyle = wallGrad;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        ctx.fillRect(12, 12, W - 24, 80);
+
+        ctx.strokeStyle = "rgba(122,82,58,0.18)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.moveTo(10, CEILING_Y);
+        ctx.lineTo(W - 10, CEILING_Y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = "#d9a67a";
+        ctx.fillRect(0, FLOOR_Y, W, H - FLOOR_Y);
+
+        ctx.fillStyle = "#c9956d";
+        for (let x = 0; x < W; x += 28) {
+          ctx.fillRect(x, FLOOR_Y + 8, 14, 4);
+        }
+
+        ctx.fillStyle = "rgba(255,255,255,0.25)";
+        ctx.fillRect(0, FLOOR_Y, W, 6);
+      }
+
+      function drawHUD() {
+        ctx.fillStyle = "rgba(255, 248, 240, 0.88)";
+        roundedRect(ctx, 10, 10, 150, 42, 10);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(122,82,58,0.2)";
+        ctx.stroke();
+
+        ctx.fillStyle = "#6b4a3a";
+        ctx.font = "bold 12px Trebuchet MS, sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText("積んだ猫", 20, 16);
+        ctx.font = "bold 22px Trebuchet MS, sans-serif";
+        ctx.fillText(`${score} / ${CLEAR_COUNT}`, 20, 30);
+
+        const gaugeW = 120;
+        const gx = W - gaugeW - 16;
+        ctx.fillStyle = "rgba(255, 248, 240, 0.88)";
+        roundedRect(ctx, gx, 10, gaugeW, 42, 10);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(122,82,58,0.2)";
+        ctx.stroke();
+
+        ctx.fillStyle = "#6b4a3a";
+        ctx.font = "bold 12px Trebuchet MS, sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText("残り時間", gx + 10, 16);
+
+        const ratio = Math.max(0, timeLeft / TIME_LIMIT);
+        ctx.fillStyle = "rgba(180, 140, 110, 0.25)";
+        roundedRect(ctx, gx + 10, 32, gaugeW - 20, 10, 5);
+        ctx.fill();
+        ctx.fillStyle = ratio > 0.25 ? "#8bc34a" : "#ef5350";
+        roundedRect(ctx, gx + 10, 32, (gaugeW - 20) * ratio, 10, 5);
+        ctx.fill();
+
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#6b4a3a";
+        ctx.font = "bold 11px Trebuchet MS, sans-serif";
+        ctx.fillText(`${Math.ceil(Math.max(0, timeLeft))}s`, gx + gaugeW - 10, 16);
+      }
+
+      function drawTitle() {
+        ctx.fillStyle = "rgba(255,255,255,0.55)";
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        ctx.font = "bold 24px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#6b3f2a";
+        ctx.fillText("マタタビ大合唱", W / 2, 170);
+
+        ctx.font = "bold 15px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#8a5f4a";
+        ctx.fillText("～モフモフ・カオス・タワー～", W / 2, 202);
+
+        ctx.font = "14px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#7a5a48";
+        ctx.fillText("マタタビを置いて猫を誘導！", W / 2, 248);
+        ctx.fillText(`${CLEAR_COUNT}匹で大合唱クリア`, W / 2, 268);
+
+        const pulse = 0.55 + Math.sin(performance.now() * 0.008) * 0.45;
+        ctx.globalAlpha = pulse;
+        ctx.font = "bold 20px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#7cb342";
+        ctx.fillText("START", W / 2, 330);
+        ctx.globalAlpha = 1;
+
+        drawDemoCat(W / 2, 400);
+        drawDemoMatatabi(W / 2 - 70, 430, performance.now());
+        drawDemoMatatabi(W / 2 + 70, 410, performance.now() + 500);
+      }
+
+      function drawDemoCat(x, y) {
+        const cat = new Cat(x);
+        cat.y = y;
+        cat.onGround = true;
+        cat.draw();
+      }
+
+      function drawDemoMatatabi(x, y, t) {
+        const m = new Matatabi(x, y);
+        m.draw(t);
+      }
+
+      function drawOverlay(title, subtitle, accent, showRetry) {
+        ctx.fillStyle = "rgba(74, 50, 40, 0.45)";
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        ctx.font = "bold 34px Trebuchet MS, sans-serif";
+        ctx.fillStyle = accent;
+        ctx.fillText(title, W / 2, H * 0.38);
+
+        ctx.font = "bold 18px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#fff8ef";
+        ctx.fillText(subtitle, W / 2, H * 0.48);
+
+        if (showRetry) {
+          const pulse = 0.5 + Math.sin(performance.now() * 0.01) * 0.5;
+          ctx.globalAlpha = pulse;
+          ctx.font = "bold 16px Trebuchet MS, sans-serif";
+          ctx.fillStyle = "#ffe082";
+          ctx.fillText("タップ / Rキーでリトライ", W / 2, H * 0.58);
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      function drawChaosEffects(t) {
+        ctx.save();
+        ctx.globalAlpha = 0.12 + Math.sin(chaosPhase) * 0.06;
+        for (let i = 0; i < 8; i++) {
+          ctx.fillStyle = `hsl(${(t * 0.05 + i * 40) % 360}, 80%, 65%)`;
+          ctx.beginPath();
+          ctx.arc(
+            (Math.sin(t * 0.002 + i) * 0.5 + 0.5) * W,
+            (Math.cos(t * 0.0015 + i * 1.7) * 0.5 + 0.5) * H,
+            30 + i * 8,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
+        ctx.restore();
+
+        ctx.textAlign = "center";
+        ctx.font = "bold 28px Trebuchet MS, sans-serif";
+        ctx.fillStyle = `hsl(${(t * 0.08) % 360}, 85%, 58%)`;
+        ctx.fillText("ニャーニャー大合唱！", W / 2, 90 + Math.sin(t * 0.01) * 6);
+      }
+
+      function render(t) {
+        drawRoom();
+
+        if (matatabi && matatabi.active) {
+          matatabi.draw(t);
+        }
+
+        for (const cat of cats) {
+          cat.draw();
+        }
+
+        if (state === STATE.PLAYING || state === STATE.CHORUS) {
+          drawHUD();
+        }
+
+        if (state === STATE.TITLE) {
+          drawTitle();
+        } else if (state === STATE.CHORUS) {
+          drawChaosEffects(t);
+        } else if (state === STATE.RESULT) {
+          drawOverlay("CAOS CLEAR!", `最終スコア: ${score}匹`, "#ffd54f", true);
+        } else if (state === STATE.GAMEOVER) {
+          drawOverlay("GAME OVER", `猫が天井を超えました (${score}匹)`, "#ef5350", true);
+        }
+      }
+
+      function roundedRect(ctx2, x, y, w, h, r) {
+        const rr = Math.min(r, w / 2, h / 2);
+        ctx2.beginPath();
+        ctx2.moveTo(x + rr, y);
+        ctx2.arcTo(x + w, y, x + w, y + h, rr);
+        ctx2.arcTo(x + w, y + h, x, y + h, rr);
+        ctx2.arcTo(x, y + h, x, y, rr);
+        ctx2.arcTo(x, y, x + w, y, rr);
+        ctx2.closePath();
+      }
+
+      function tri(ctx2, x1, y1, x2, y2, x3, y3) {
+        ctx2.beginPath();
+        ctx2.moveTo(x1, y1);
+        ctx2.lineTo(x2, y2);
+        ctx2.lineTo(x3, y3);
+        ctx2.closePath();
+        ctx2.fill();
+      }
+
+      function tick(now) {
+        if (!lastTime) lastTime = now;
+        const dt = Math.min((now - lastTime) / 1000, 0.05);
+        lastTime = now;
+        update(dt);
+        render(now);
+        requestAnimationFrame(tick);
+      }
+
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>

@@ -8,6 +8,7 @@ import discord
 from agents.base_agent import BaseAgent
 from agents.pm.agent import PMAgent
 from agents.pm.schemas import PMDecision
+from meeting_chat_log import MeetingChatLogWriter
 
 
 class DynamicOrchestrator:
@@ -343,6 +344,7 @@ class DynamicOrchestrator:
         theme: str,
         channel: discord.TextChannel,
         revision_guidance: Optional[str] = None,
+        chat_log: Optional[MeetingChatLogWriter] = None,
     ) -> tuple[str, list[str], Optional[PMDecision]]:
         self.last_meeting_trace = []
         history: list[str] = []
@@ -540,6 +542,15 @@ class DynamicOrchestrator:
             trace_entry["target_final"] = decision.target_agent
             self.last_meeting_trace.append(trace_entry)
 
+            if chat_log is not None:
+                chat_log.log_phase_if_changed(decision.phase, turn=current_turn)
+                chat_log.log_agent_message(
+                    agent_name=self.pm.name,
+                    message=decision.speech,
+                    phase=decision.phase,
+                    turn=current_turn,
+                )
+
             if decision.next_action == "FINISH_FOR_PRESIDENT":
                 final_decision = decision
                 break
@@ -599,6 +610,13 @@ class DynamicOrchestrator:
                 break
 
             history.append(f"{target_agent.name}: {reply_text}")
+            if chat_log is not None:
+                chat_log.log_agent_message(
+                    agent_name=target_agent.name,
+                    message=reply_text,
+                    phase=decision.phase,
+                    turn=current_turn,
+                )
             # track how many times each agent has been consulted
             if target_role in consulted_counts:
                 consulted_counts[target_role] += 1
@@ -641,6 +659,9 @@ class ProposalSelectView(discord.ui.View):
         meeting_channel: discord.TextChannel,
         theme: str,
         rerun_meeting: Optional[Callable[[str, discord.TextChannel, Optional[str]], Awaitable[None]]] = None,
+        artifact_stem: Optional[str] = None,
+        meeting_log_path: Optional[Path] = None,
+        proposal_message_id: Optional[str] = None,
     ):
         super().__init__(timeout=None)
         self.final_recommendation = final_recommendation
@@ -650,6 +671,9 @@ class ProposalSelectView(discord.ui.View):
         self.meeting_channel = meeting_channel
         self.theme = theme
         self.rerun_meeting = rerun_meeting
+        self.artifact_stem = artifact_stem
+        self.meeting_log_path = meeting_log_path
+        self.proposal_message_id = proposal_message_id
 
         go_button = discord.ui.Button(
             label="Go",
@@ -679,6 +703,10 @@ class ProposalSelectView(discord.ui.View):
         return callback
 
     async def _finalize(self, interaction: discord.Interaction, decision: str) -> None:
+        chat_log = None
+        if self.meeting_log_path is not None and self.meeting_log_path.exists():
+            chat_log = MeetingChatLogWriter.open_existing(self.meeting_log_path)
+
         if decision == "go":
             plan_label = self.final_category
             self._disable_buttons()
@@ -688,15 +716,32 @@ class ProposalSelectView(discord.ui.View):
                 ephemeral=False,
             )
 
+            if chat_log is not None:
+                chat_log.log_decision(
+                    decision="go",
+                    phase="FINAL",
+                    turn=10,
+                    reply_to=self.proposal_message_id,
+                )
+
             spec_path = await self.pm_agent.generate_spec_for_plan(
                 selected_plan=plan_label,
                 proposal_summary=self.final_recommendation,
                 theme=self.theme,
+                artifact_stem=self.artifact_stem,
             )
             await interaction.followup.send(
                 f"📄 仕様書を出力・保存しました: `{spec_path}`"
             )
             return
+
+        if chat_log is not None:
+            chat_log.log_decision(
+                decision="nogo",
+                phase="FINAL",
+                turn=10,
+                reply_to=self.proposal_message_id,
+            )
 
         await interaction.response.send_modal(NoGoRevisionModal(self))
 

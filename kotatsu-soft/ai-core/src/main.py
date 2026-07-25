@@ -8,7 +8,9 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
+from artifact_naming import build_artifact_stem
 from config import ConfigError, Config, get_config
+from meeting_chat_log import MeetingChatLogWriter, normalize_plain_text
 from orchestrator import DynamicOrchestrator, ProposalSelectView, build_president_final_message
 from agents.dev.agent import DevAgent
 from agents.marketing.agent import MarketingAgent
@@ -136,6 +138,12 @@ async def _restore_persistent_views() -> None:
             final_recommendation = str(record["final_recommendation"])
             final_category = str(record.get("final_category") or "未定")
             revision_guidance = str(record.get("revision_guidance") or "改善の方向性を明確にして、再度検討してください。")
+            artifact_stem = str(record.get("artifact_stem") or "").strip() or None
+            meeting_log_file = str(record.get("meeting_log_file") or "").strip()
+            meeting_log_path = None
+            if meeting_log_file:
+                meeting_log_path = Path(__file__).resolve().parents[2] / "shared" / "meeting" / meeting_log_file
+            proposal_message_id = str(record.get("proposal_message_id") or "").strip() or None
         except (KeyError, TypeError, ValueError):
             continue
 
@@ -157,6 +165,9 @@ async def _restore_persistent_views() -> None:
             meeting_channel=meeting_channel,
             theme=theme,
             rerun_meeting=run_meeting_round,
+            artifact_stem=artifact_stem,
+            meeting_log_path=meeting_log_path,
+            proposal_message_id=proposal_message_id,
         )
         bot.add_view(view, message_id=message_id)
         restored += 1
@@ -224,10 +235,24 @@ async def run_meeting_round(
         president_mention=cfg.PRESIDENT_MENTION,
     )
 
+    artifact_stem = build_artifact_stem(theme)
+    chat_log = MeetingChatLogWriter(artifact_stem=artifact_stem)
+    chat_log.log_meeting_start(theme)
+    if revision_guidance:
+        chat_log.append(
+            role="system",
+            message=f"修正方針：{normalize_plain_text(revision_guidance)}",
+            msg_type="system",
+            phase="DIVERGENCE",
+            turn=0,
+        )
+    chat_log.log_president_message(theme, turn=1)
+
     final_pm_speech, history, final_decision = await orchestrator.execute_meeting(
         theme,
         meeting_channel,
         revision_guidance=revision_guidance,
+        chat_log=chat_log,
     )
     _append_meeting_turn_audit_record(
         channel_id=meeting_channel.id,
@@ -259,6 +284,20 @@ async def run_meeting_round(
             or "改善の方向性を明確にして、再度検討してください。"
         )
 
+    proposal_message_id: Optional[str] = None
+    if final_decision is not None:
+        proposal_lines = [
+            "【最終提案】",
+            f"カテゴリ：{final_category}",
+            f"概要：{final_recommendation}",
+            f"修正ガイドライン（NoGo時）：{revision_guidance_text}",
+        ]
+        proposal_message_id = chat_log.log_proposal(
+            message="\n".join(proposal_lines),
+            phase=final_decision.phase or "FINAL",
+            turn=len(orchestrator.last_meeting_trace) or 1,
+        )
+
     def chunk_text(text: str, limit: int = 2000) -> list[str]:
         chunks: list[str] = []
         while text:
@@ -280,6 +319,9 @@ async def run_meeting_round(
         meeting_channel=meeting_channel,
         theme=theme,
         rerun_meeting=run_meeting_round,
+        artifact_stem=artifact_stem,
+        meeting_log_path=chat_log.path,
+        proposal_message_id=proposal_message_id,
     )
 
     summary_chunks = chunk_text(summary)
@@ -294,6 +336,9 @@ async def run_meeting_round(
             "final_recommendation": final_recommendation,
             "final_category": final_category,
             "revision_guidance": revision_guidance_text,
+            "artifact_stem": artifact_stem,
+            "meeting_log_file": chat_log.path.name,
+            "proposal_message_id": proposal_message_id,
         }
     )
 

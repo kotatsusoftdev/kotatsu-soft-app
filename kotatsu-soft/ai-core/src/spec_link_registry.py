@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 
+from artifact_naming import meeting_log_filename
+
 DEFAULT_SCHEMA_VERSION = 1
 
 
@@ -76,15 +78,21 @@ def register_generated_spec(
     selected_plan: str,
     proposal_summary: str,
     theme: Optional[str] = None,
+    artifact_stem: Optional[str] = None,
 ) -> dict[str, Any]:
     payload = load_registry()
     records = [record for record in payload.get("records", []) if isinstance(record, dict)]
 
     spec_file_name = spec_file.name
     created_at = _utc_now_iso()
+    stem = artifact_stem or spec_file_name.removeprefix("spec_").removesuffix(".md")
+    meeting_log_file = meeting_log_filename(stem)
     new_record: dict[str, Any] = {
         "spec_file": spec_file_name,
         "spec_path": f"shared/specs/{spec_file_name}",
+        "artifact_stem": stem,
+        "meeting_log_file": meeting_log_file,
+        "meeting_log_path": f"shared/meeting/{meeting_log_file}",
         "selected_plan": selected_plan,
         "proposal_summary": proposal_summary,
         "theme": theme or "",

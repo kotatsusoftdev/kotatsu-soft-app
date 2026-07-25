@@ -7,6 +7,7 @@ from google.genai import types
 
 from agents.base_agent import BaseAgent
 from agents.pm.schemas import PMDecision
+from artifact_naming import spec_path as build_spec_path
 from spec_link_registry import register_generated_spec
 
 
@@ -415,6 +416,7 @@ class PMAgent(BaseAgent):
         selected_plan: str,
         proposal_summary: str,
         theme: Optional[str] = None,
+        artifact_stem: Optional[str] = None,
     ) -> Path:
         instruction = (
             "あなたはPMエージェントです。採用された案の概要を受け取り、"
@@ -442,19 +444,24 @@ class PMAgent(BaseAgent):
 
         spec_text = self.extract_text_from_response(response).strip()
         repo_root = Path(__file__).resolve().parents[4]
-        specs_dir = repo_root / "shared" / "specs"
-        specs_dir.mkdir(parents=True, exist_ok=True)
-        safe_plan_name = "".join(
-            c if c.isalnum() or c in ("_", "-") else "_"
-            for c in selected_plan
-        )
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        spec_file = specs_dir / f"spec_{safe_plan_name}_{timestamp}.md"
+        if artifact_stem:
+            spec_file = build_spec_path(repo_root, artifact_stem)
+            spec_file.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            specs_dir = repo_root / "shared" / "specs"
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            safe_plan_name = "".join(
+                c if c.isalnum() or c in ("_", "-") else "_"
+                for c in selected_plan
+            )
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            spec_file = specs_dir / f"spec_{safe_plan_name}_{timestamp}.md"
         spec_file.write_text(spec_text, encoding="utf-8")
         register_generated_spec(
             spec_file=spec_file,
             selected_plan=selected_plan,
             proposal_summary=proposal_summary,
             theme=theme,
+            artifact_stem=artifact_stem,
         )
         return spec_file

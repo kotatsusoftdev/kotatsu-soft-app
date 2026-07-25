@@ -300,6 +300,12 @@
         linear-gradient(135deg, #17243f, #253f70 52%, #3f65a6);
     }
 
+    .thumb.matatabi {
+      background:
+        radial-gradient(180px 90px at 72% 14%, rgba(255, 255, 255, 0.34), transparent 66%),
+        linear-gradient(135deg, #7cb342, #aed581 48%, #fff176);
+    }
+
     .game-card h3 {
       margin: 0;
       font-size: 1.12rem;
@@ -568,7 +574,8 @@
         <p>
           ・10秒コタツミカンバスター<br />
           ・ニャンコ・ダイブ！<br />
-          プレイ時間はどちらも 1 分以内。休憩時間にどうぞ。
+          ・マタタビ大合唱<br />
+          プレイ時間はどれも 1 分前後。休憩時間にどうぞ。
         </p>
       </aside>
     </section>
@@ -601,7 +608,7 @@
               <span class="pill play-count play-count-mikan" data-stat-id="mikan" aria-live="polite">🎮 -回プレイ</span>
               <a class="action-btn play" data-game-id="mikan_buster" href="./001_mikan_buster/src/index.html">Play</a>
               <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
-              <a class="action-btn spec-link" data-game-id="mikan_buster" href="../shared/specs/spec_20260720_112402.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
+              <a class="action-btn spec-link" data-game-id="mikan_buster" href="../shared/spec.html?file=spec_20260720_112402.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
             </div>
           </div>
         </article>
@@ -616,7 +623,22 @@
               <span class="pill play-count play-count-nyanko" data-stat-id="nyanko" aria-live="polite">🎮 -回プレイ</span>
               <a class="action-btn play" data-game-id="nyanko_dive" href="./002_nyanko_dive/src/index.html">Play</a>
               <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
-              <a class="action-btn spec-link" data-game-id="nyanko_dive" href="../shared/specs/spec_ゲーム開発___ブラウザミニゲーム_20260722_125043.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
+              <a class="action-btn spec-link" data-game-id="nyanko_dive" href="../shared/spec.html?file=spec_ゲーム開発___ブラウザミニゲーム_20260722_125043.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="game-card fade-up">
+          <div class="thumb matatabi" aria-hidden="true">MATATABI CHAOS</div>
+          <h3>マタタビ大合唱 ～モフモフ・カオス・タワー～</h3>
+          <p>マタタビで猫を誘導してモフモフを積み上げ、30匹でニャーニャー大合唱クリア！</p>
+          <div class="card-footer">
+            <div class="actions">
+              <span class="pill">Chaos Puzzle</span>
+              <span class="pill play-count play-count-matatabi" data-stat-id="matatabi_chaos" aria-live="polite">🎮 -回プレイ</span>
+              <a class="action-btn play" data-game-id="matatabi_chaos" href="./003_matatabi_chaos/src/index.html">Play</a>
+              <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
+              <a class="action-btn spec-link" data-game-id="matatabi_chaos" href="../shared/spec.html?file=spec_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
             </div>
           </div>
         </article>
@@ -762,7 +784,7 @@
         const specFile = latest.spec_file.trim();
         if (!specFile) continue;
 
-        linkEl.href = `../shared/specs/${encodeURIComponent(specFile)}`;
+        linkEl.href = `../shared/spec.html?file=${encodeURIComponent(specFile)}`;
         const selectedPlan = typeof latest.selected_plan === "string" ? latest.selected_plan.trim() : "";
         if (selectedPlan) {
           linkEl.title = `最新仕様書: ${selectedPlan}`;

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-07-22T00:00:00+00:00",
+  "updated_at": "2026-07-25T04:07:39.454095+00:00",
   "records": [
     {
       "spec_file": "spec_20260720_112402.md",
@@ -31,6 +31,34 @@
           "game_path": "game-projects/002_nyanko_dive/src/index.html",
           "game_title": "ニャンコ・ダイブ！",
           "linked_at": "2026-07-22T00:00:00+00:00"
+        }
+      ]
+    },
+    {
+      "spec_file": "spec_パズルゲーム_バカゲー_シュール演出__20260725_101231.md",
+      "spec_path": "shared/specs/spec_パズルゲーム_バカゲー_シュール演出__20260725_101231.md",
+      "selected_plan": "パズルゲーム（バカゲー・シュール演出）",
+      "proposal_summary": "ボタンを連打ではなく地面タップで画面の底からモアイ像の顔ブロックが「ドスコイ！」と突き上げ、上のブロックを力づくで押し上げる『お辞儀テトリス』。HTML5 Canvasと素のJavaScriptで実装し、Y座標の強制上書きとシンプルな重なり判定で1日での完全完成を目指します。",
+      "theme": "テトリスみたいなゲームを作って",
+      "created_at": "2026-07-25T01:12:31.737969+00:00",
+      "linked_games": []
+    },
+    {
+      "spec_file": "spec_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.md",
+      "spec_path": "shared/specs/spec_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.md",
+      "artifact_stem": "テトリスと猫を掛け合わせたゲームを作って_20260725_124622",
+      "meeting_log_file": "meeting_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.jsonl",
+      "meeting_log_path": "shared/meeting/meeting_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.jsonl",
+      "selected_plan": "ゲーム開発（ブラウザパズル）",
+      "proposal_summary": "HTML5 Canvasと素のJavaScript、Web Audio APIを駆使した「マタタビ誘導型カオス猫パズル」！複雑な物理演算や綺麗な消去ルールは一切削ぎ落とし、マタタビで猫を誘導しながら画面いっぱいにモフモフを積み上げて大合唱させる、1日実装・爆笑必至のシュール系ブラウザゲーム案です。",
+      "theme": "テトリスと猫を掛け合わせたゲームを作って",
+      "created_at": "2026-07-25T03:49:03.363878+00:00",
+      "linked_games": [
+        {
+          "game_id": "matatabi_chaos",
+          "game_path": "game-projects/003_matatabi_chaos/src/index.html",
+          "game_title": "マタタビ大合唱 ～モフモフ・カオス・タワー～",
+          "linked_at": "2026-07-25T04:07:39.453209+00:00"
         }
       ]
     }
