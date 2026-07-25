@@ -35,10 +35,14 @@ jobs:
 
       - name: Prepare Pages artifact
         run: |
-          mkdir -p _pages/shared/specs
+          mkdir -p _pages/shared/specs _pages/shared/meeting
           cp -r kotatsu-soft/game-projects/. _pages/
           cp kotatsu-soft/shared/spec.html _pages/shared/
+          cp kotatsu-soft/shared/meeting.html _pages/shared/
           cp kotatsu-soft/shared/specs/* _pages/shared/specs/
+          if compgen -G "kotatsu-soft/shared/meeting/*.jsonl" > /dev/null; then
+            cp kotatsu-soft/shared/meeting/*.jsonl _pages/shared/meeting/
+          fi
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
