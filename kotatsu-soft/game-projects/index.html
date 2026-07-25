@@ -312,17 +312,26 @@
     }
 
     .actions {
-      margin-top: 6px;
       display: flex;
-      align-items: stretch;
+      align-items: center;
       justify-content: flex-start;
       gap: 8px;
       flex-wrap: wrap;
     }
 
     .actions .pill {
-      flex: 0 0 100%;
-      justify-content: flex-start;
+      flex: 0 1 auto;
+    }
+
+    .card-actions-group {
+      display: grid;
+      gap: 8px;
+    }
+
+    .sub-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
     }
 
     .pill {
@@ -359,8 +368,27 @@
       letter-spacing: 0.04em;
       border: 1px solid transparent;
       transition: filter 160ms ease, transform 160ms ease, background 160ms ease, border-color 160ms ease;
-      white-space: nowrap;
-      flex: 1 1 120px;
+      text-align: center;
+      line-height: 1.25;
+    }
+
+    .action-btn.play {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      box-shadow: 0 8px 20px rgba(191, 47, 47, 0.28);
+    }
+
+    .sub-actions .action-btn {
+      width: 100%;
+      min-width: 0;
+      padding: 8px 4px;
+      font-size: clamp(0.68rem, 2.2vw, 0.78rem);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      white-space: normal;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
     }
 
     .play {
@@ -396,13 +424,6 @@
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
     }
 
-    .spec-link::before {
-      content: "📝";
-      margin-right: 6px;
-      line-height: 1;
-      font-size: 0.92rem;
-    }
-
     .spec-link:hover,
     .spec-link:focus-visible {
       filter: brightness(1.03);
@@ -415,13 +436,6 @@
       background: linear-gradient(180deg, #eefaf1, #d7f0dd);
       border-color: rgba(47, 95, 69, 0.24);
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
-    }
-
-    .meeting-link::before {
-      content: "💬";
-      margin-right: 6px;
-      line-height: 1;
-      font-size: 0.92rem;
     }
 
     .meeting-link:hover,
@@ -490,6 +504,56 @@
       line-height: 1.7;
     }
 
+    .staff-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .staff-card {
+      border: 1px solid rgba(123, 47, 18, 0.16);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(255, 252, 246, 0.92), rgba(255, 236, 210, 0.88));
+      padding: 12px 10px;
+      text-align: center;
+      box-shadow: 0 6px 16px rgba(88, 53, 21, 0.08);
+      transition: transform 160ms ease, box-shadow 160ms ease;
+    }
+
+    .staff-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 22px rgba(88, 53, 21, 0.14);
+    }
+
+    .staff-avatar {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      margin: 0 auto 8px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ffe8c8, #ffd095);
+      border: 1px solid rgba(123, 47, 18, 0.14);
+      font-size: 1.35rem;
+      line-height: 1;
+    }
+
+    .staff-name {
+      margin: 0;
+      font-size: 0.88rem;
+      font-weight: 800;
+      color: #7b2f12;
+      letter-spacing: 0.03em;
+    }
+
+    .staff-role {
+      margin: 4px 0 0;
+      font-size: 0.76rem;
+      color: #6f5849;
+      line-height: 1.45;
+    }
+
     footer {
       padding: 14px 18px 18px;
       color: #755f50;
@@ -547,6 +611,12 @@
       }
     }
 
+    @media (max-width: 720px) {
+      .staff-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
     @media (max-width: 520px) {
       .global-stat .value {
         font-size: 1.02rem;
@@ -556,8 +626,32 @@
         gap: 6px;
       }
 
-      .action-btn {
-        flex-basis: 112px;
+      .sub-actions {
+        gap: 5px;
+      }
+
+      .sub-actions .action-btn {
+        padding: 7px 3px;
+        font-size: 0.68rem;
+      }
+
+      .action-btn.play {
+        padding: 11px 12px;
+        font-size: 0.9rem;
+      }
+
+      .staff-grid {
+        gap: 8px;
+      }
+
+      .staff-card {
+        padding: 10px 8px;
+      }
+
+      .staff-avatar {
+        width: 38px;
+        height: 38px;
+        font-size: 1.15rem;
       }
     }
   </style>
@@ -620,10 +714,14 @@
             <div class="actions">
               <span class="pill">Chaos Puzzle</span>
               <span class="pill play-count play-count-matatabi" data-stat-id="matatabi_chaos" aria-live="polite">🎮 -回プレイ</span>
-              <a class="action-btn play" data-game-id="matatabi_chaos" href="./001_matatabi_chaos/src/index.html">Play</a>
-              <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">開発動画</a>
-              <a class="action-btn spec-link" data-game-id="matatabi_chaos" href="./shared/spec.html?file=spec_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.md" target="_blank" rel="noopener noreferrer">仕様書を見る</a>
-              <a class="action-btn meeting-link" data-game-id="matatabi_chaos" href="./shared/meeting.html?file=meeting_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.jsonl" target="_blank" rel="noopener noreferrer">企画会議</a>
+            </div>
+            <div class="card-actions-group">
+              <a class="action-btn play" data-game-id="matatabi_chaos" href="./001_matatabi_chaos/src/index.html">今すぐ遊ぶ (Play)</a>
+              <div class="sub-actions">
+                <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">🎬 開発動画</a>
+                <a class="action-btn spec-link" data-game-id="matatabi_chaos" href="./shared/spec.html?file=spec_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.md" target="_blank" rel="noopener noreferrer">📄 AI仕様書</a>
+                <a class="action-btn meeting-link" data-game-id="matatabi_chaos" href="./shared/meeting.html?file=meeting_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.jsonl" target="_blank" rel="noopener noreferrer">💬 会議ログ</a>
+              </div>
             </div>
           </div>
         </article>
@@ -636,7 +734,29 @@
 
       <section class="studio">
         <h3>About KOTATSU SOFT</h3>
-        <p>設計思想は シンプル入力 と 気持ちいい失敗。プレイしてすぐ笑える体験を目指しています。</p>
+        <p>設計思想は シンプル入力 と 気持ちいい失敗。プレイしてすぐ笑える体験を目指しています。開発の裏側は AI 仕様書や会議ログから覗けます。</p>
+        <div class="staff-grid" aria-label="AI社員紹介">
+          <article class="staff-card">
+            <div class="staff-avatar" aria-hidden="true">👔</div>
+            <p class="staff-name">のぶ太社長</p>
+            <p class="staff-role">アイデア・進行</p>
+          </article>
+          <article class="staff-card">
+            <div class="staff-avatar" aria-hidden="true">📋</div>
+            <p class="staff-name">すずかちゃん</p>
+            <p class="staff-role">企画・PM / AI</p>
+          </article>
+          <article class="staff-card">
+            <div class="staff-avatar" aria-hidden="true">💻</div>
+            <p class="staff-name">スゴ杉くん</p>
+            <p class="staff-role">エンジニア / AI</p>
+          </article>
+          <article class="staff-card">
+            <div class="staff-avatar" aria-hidden="true">📣</div>
+            <p class="staff-name">ヂャイアン</p>
+            <p class="staff-role">マーケティング / AI</p>
+          </article>
+        </div>
       </section>
     </main>
 
