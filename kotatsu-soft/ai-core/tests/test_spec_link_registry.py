@@ -21,14 +21,14 @@ def test_register_generated_spec_and_link(monkeypatch, tmp_path: Path) -> None:
 
     linked = link_spec_to_game(
         spec_file="spec_example_20260722.md",
-        game_id="mikan_buster",
-        game_path="game-projects/001_mikan_buster/src/index.html",
-        game_title="10秒コタツミカンバスター",
+        game_id="matatabi_chaos",
+        game_path="game-projects/003_matatabi_chaos/src/index.html",
+        game_title="マタタビ大合唱 ～モフモフ・カオス・タワー～",
     )
 
-    assert linked["linked_games"][0]["game_id"] == "mikan_buster"
+    assert linked["linked_games"][0]["game_id"] == "matatabi_chaos"
 
-    latest = get_latest_spec_for_game("mikan_buster")
+    latest = get_latest_spec_for_game("matatabi_chaos")
     assert latest is not None
     assert latest["spec_file"] == "spec_example_20260722.md"
 

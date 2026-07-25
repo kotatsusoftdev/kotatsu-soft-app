@@ -184,14 +184,14 @@ Reusable example for game pages (e.g. game over screen):
 import { incrementGamePlay, fetchPortalStats } from "../common/stats-client.js";
 
 // Increment when a run starts or when game over happens.
-incrementGamePlay("mikan_buster", {
-  page: "001_mikan_buster",
+incrementGamePlay("matatabi_chaos", {
+  page: "003_matatabi_chaos",
   source: "game-over",
 });
 
 // Optional: pull latest aggregate stats for in-game UI.
 const stats = await fetchPortalStats();
-if (stats?.gamePlays?.mikan_buster != null) {
-  console.log("Latest plays:", stats.gamePlays.mikan_buster);
+if (stats?.gamePlays?.matatabi_chaos != null) {
+  console.log("Latest plays:", stats.gamePlays.matatabi_chaos);
 }
 */

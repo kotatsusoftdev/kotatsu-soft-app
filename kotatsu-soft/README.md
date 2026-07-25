@@ -10,7 +10,7 @@
 - game-projects/
   - コタツ・ソフト公式ポータルとゲーム群
   - index.html がポータルページ
-  - 001_mikan_buster/ と 002_nyanko_dive/ がゲーム本体
+  - 003_matatabi_chaos/ がゲーム本体
 - shared/
   - 仕様書やログなどの共通出力
 
@@ -89,10 +89,9 @@ ai-core が Go 判定後に仕様書を生成すると、`shared/specs/spec_game
 
 ```bash
 cd kotatsu-soft/ai-core
-python scripts/link_spec_to_game.py --spec spec_xxx.md --game-id mikan_buster --game-path game-projects/001_mikan_buster/src/index.html --game-title "10秒コタツミカンバスター"
+python scripts/link_spec_to_game.py --spec spec_xxx.md --game-id matatabi_chaos --game-path game-projects/003_matatabi_chaos/src/index.html --game-title "マタタビ大合唱 ～モフモフ・カオス・タワー～"
 ```
 
 主要な `game-id` 例:
 
-- `mikan_buster`
-- `nyanko_dive`
+- `matatabi_chaos`
