@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KOTATSU SOFT | Browser Games</title>
+  <link rel="icon" href="./assets/channel-icon.png" type="image/png" />
   <style>
     :root {
       --bg-0: #fff8ef;
@@ -92,6 +93,24 @@
       display: grid;
       gap: 6px;
       min-width: 0;
+    }
+
+    .brand-mark {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand-icon {
+      width: 48px;
+      height: 48px;
+      flex-shrink: 0;
+      border-radius: 12px;
+      object-fit: cover;
+      background: #fff4df;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      box-shadow: 0 6px 14px rgba(64, 24, 8, 0.22);
     }
 
     .logo {
@@ -504,6 +523,21 @@
       line-height: 1.7;
     }
 
+    .studio-banner {
+      margin: 2px 0 4px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(123, 47, 18, 0.14);
+      background: #f3e2c8;
+      line-height: 0;
+    }
+
+    .studio-banner img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
     .staff-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -529,14 +563,21 @@
     .staff-avatar {
       display: grid;
       place-items: center;
-      width: 44px;
-      height: 44px;
+      width: 56px;
+      height: 56px;
       margin: 0 auto 8px;
       border-radius: 50%;
+      overflow: hidden;
       background: linear-gradient(135deg, #ffe8c8, #ffd095);
       border: 1px solid rgba(123, 47, 18, 0.14);
-      font-size: 1.35rem;
-      line-height: 1;
+    }
+
+    .staff-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 50%;
+      display: block;
     }
 
     .staff-name {
@@ -649,9 +690,8 @@
       }
 
       .staff-avatar {
-        width: 38px;
-        height: 38px;
-        font-size: 1.15rem;
+        width: 48px;
+        height: 48px;
       }
     }
   </style>
@@ -663,7 +703,17 @@
     <header>
       <div class="brand-row">
         <div class="brand-copy">
-          <p class="logo">KOTATSU SOFT</p>
+          <div class="brand-mark">
+            <img
+              class="brand-icon"
+              src="./assets/channel-icon.png"
+              alt=""
+              width="48"
+              height="48"
+              decoding="async"
+            />
+            <p class="logo">KOTATSU SOFT</p>
+          </div>
           <p class="tag">素人社長とAI社員がつくる、あたたかいインディーズゲームスタジオ</p>
         </div>
         <a class="youtube-cta" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">YouTubeを見る</a>
@@ -735,24 +785,70 @@
       <section class="studio">
         <h3>About KOTATSU SOFT</h3>
         <p>設計思想は シンプル入力 と 気持ちいい失敗。プレイしてすぐ笑える体験を目指しています。開発の裏側は AI 仕様書や会議ログから覗けます。</p>
+        <figure class="studio-banner">
+          <img
+            src="./assets/youtube-banner.png"
+            alt="コタツを囲む KOTATSU SOFT のメンバー"
+            width="1024"
+            height="576"
+            loading="lazy"
+            decoding="async"
+          />
+        </figure>
         <div class="staff-grid" aria-label="AI社員紹介">
           <article class="staff-card">
-            <div class="staff-avatar" aria-hidden="true">👔</div>
+            <div class="staff-avatar">
+              <img
+                src="https://raw.githubusercontent.com/kotatsusoftdev/kotatsu-soft-app/main/kotatsu-soft/ai-core/assets/avatars/nobuta.png"
+                alt="のぶ太社長"
+                width="56"
+                height="56"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
             <p class="staff-name">のぶ太社長</p>
             <p class="staff-role">アイデア・進行</p>
           </article>
           <article class="staff-card">
-            <div class="staff-avatar" aria-hidden="true">📋</div>
+            <div class="staff-avatar">
+              <img
+                src="https://raw.githubusercontent.com/kotatsusoftdev/kotatsu-soft-app/main/kotatsu-soft/ai-core/assets/avatars/pm.png"
+                alt="すずかちゃん"
+                width="56"
+                height="56"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
             <p class="staff-name">すずかちゃん</p>
             <p class="staff-role">企画・PM / AI</p>
           </article>
           <article class="staff-card">
-            <div class="staff-avatar" aria-hidden="true">💻</div>
+            <div class="staff-avatar">
+              <img
+                src="https://raw.githubusercontent.com/kotatsusoftdev/kotatsu-soft-app/main/kotatsu-soft/ai-core/assets/avatars/dev.png"
+                alt="スゴ杉くん"
+                width="56"
+                height="56"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
             <p class="staff-name">スゴ杉くん</p>
             <p class="staff-role">エンジニア / AI</p>
           </article>
           <article class="staff-card">
-            <div class="staff-avatar" aria-hidden="true">📣</div>
+            <div class="staff-avatar">
+              <img
+                src="https://raw.githubusercontent.com/kotatsusoftdev/kotatsu-soft-app/main/kotatsu-soft/ai-core/assets/avatars/marketing.png"
+                alt="ヂャイアン"
+                width="56"
+                height="56"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
             <p class="staff-name">ヂャイアン</p>
             <p class="staff-role">マーケティング / AI</p>
           </article>
