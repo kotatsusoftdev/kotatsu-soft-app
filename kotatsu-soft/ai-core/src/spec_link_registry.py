@@ -173,3 +173,49 @@ def get_latest_spec_for_game(game_id: str) -> Optional[dict[str, Any]]:
 
     matches.sort(key=lambda record: str(record.get("created_at", "")), reverse=True)
     return matches[0]
+
+
+def get_latest_linked_game() -> Optional[dict[str, Any]]:
+    """Return the most recently linked game across all registry records."""
+    payload = load_registry()
+    records = [record for record in payload.get("records", []) if isinstance(record, dict)]
+
+    candidates: list[tuple[str, dict[str, Any]]] = []
+    for record in records:
+        linked_games = record.get("linked_games")
+        if not isinstance(linked_games, list):
+            continue
+        for game in linked_games:
+            if not isinstance(game, dict):
+                continue
+            game_id = str(game.get("game_id") or "").strip()
+            if not game_id:
+                continue
+            sort_key = str(
+                game.get("linked_at")
+                or record.get("created_at")
+                or ""
+            )
+            candidates.append(
+                (
+                    sort_key,
+                    {
+                        "game_id": game_id,
+                        "game_title": str(game.get("game_title") or ""),
+                        "game_path": str(game.get("game_path") or ""),
+                        "artifact_stem": str(record.get("artifact_stem") or ""),
+                        "spec_file": str(record.get("spec_file") or ""),
+                        "linked_at": str(game.get("linked_at") or ""),
+                        "created_at": str(record.get("created_at") or ""),
+                    },
+                )
+            )
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    latest = candidates[0][1]
+    if not latest.get("artifact_stem"):
+        return None
+    return latest

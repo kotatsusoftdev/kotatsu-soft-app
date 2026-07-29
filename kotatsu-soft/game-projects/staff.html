@@ -199,12 +199,34 @@
       padding: 12px 10px;
       text-align: center;
       box-shadow: 0 6px 16px rgba(88, 53, 21, 0.08);
-      transition: transform 160ms ease, box-shadow 160ms ease;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+      cursor: pointer;
+      font: inherit;
+      color: inherit;
+      width: 100%;
+      appearance: none;
+      -webkit-appearance: none;
     }
 
     .staff-card:hover {
       transform: translateY(-2px);
       box-shadow: 0 10px 22px rgba(88, 53, 21, 0.14);
+    }
+
+    .staff-card:focus-visible {
+      outline: 2px solid rgba(191, 47, 47, 0.55);
+      outline-offset: 2px;
+    }
+
+    .staff-card.is-selected {
+      border-color: rgba(191, 47, 47, 0.55);
+      background: linear-gradient(180deg, rgba(255, 248, 236, 0.98), rgba(255, 220, 180, 0.95));
+      box-shadow: 0 12px 28px rgba(127, 74, 46, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .staff-card.is-error {
+      cursor: default;
     }
 
     .staff-avatar {
@@ -242,20 +264,124 @@
       line-height: 1.45;
     }
 
-    .staff-persona {
-      margin: 8px 0 0;
-      font-size: 0.72rem;
-      color: #5e4f45;
-      line-height: 1.55;
-      text-align: left;
+    .staff-detail {
+      margin-top: 18px;
+      padding: clamp(18px, 3vw, 28px);
+      border: 1px solid rgba(123, 47, 18, 0.14);
+      border-radius: 18px;
+      background:
+        radial-gradient(520px 180px at 8% 0%, rgba(255, 255, 255, 0.55), transparent 70%),
+        linear-gradient(180deg, rgba(255, 252, 246, 0.96), rgba(255, 236, 210, 0.9));
+      box-shadow: 0 10px 28px rgba(88, 53, 21, 0.08);
+      min-height: 180px;
     }
 
-    .staff-persona + .staff-persona {
-      margin-top: 6px;
+    .staff-detail[hidden] {
+      display: none;
     }
 
-    .staff-card.is-error .staff-persona {
+    .staff-detail-head {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .staff-detail-avatar {
+      width: 72px;
+      height: 72px;
+      flex-shrink: 0;
+      border-radius: 50%;
+      overflow: hidden;
+      background: linear-gradient(135deg, #ffe8c8, #ffd095);
+      border: 1px solid rgba(123, 47, 18, 0.14);
+      box-shadow: 0 8px 18px rgba(88, 53, 21, 0.12);
+    }
+
+    .staff-detail-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .staff-detail-identity {
+      min-width: 0;
+    }
+
+    .staff-detail-name {
+      margin: 0;
+      font-family: "DotGothic16", sans-serif;
+      font-size: clamp(1.25rem, 2.6vw, 1.7rem);
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      color: #7b2f12;
+    }
+
+    .staff-detail-role {
+      margin: 6px 0 0;
+      font-size: 0.92rem;
+      color: #6f5849;
+      letter-spacing: 0.02em;
+    }
+
+    .staff-detail-section + .staff-detail-section {
+      margin-top: 22px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(123, 47, 18, 0.12);
+    }
+
+    .staff-detail-label {
+      margin: 0 0 10px;
+      font-family: "DotGothic16", sans-serif;
+      font-size: 0.95rem;
+      letter-spacing: 0.08em;
+      color: #bf2f2f;
+    }
+
+    .staff-detail-body {
+      margin: 0;
+      font-size: clamp(0.98rem, 1.8vw, 1.12rem);
+      line-height: 1.75;
+      color: #3d3028;
+    }
+
+    .staff-detail-body + .staff-detail-body {
+      margin-top: 10px;
+    }
+
+    .staff-detail-lessons {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 12px;
+      counter-reset: lesson;
+    }
+
+    .staff-detail-lessons li {
+      position: relative;
+      padding-left: 1.6em;
+      font-size: clamp(0.98rem, 1.8vw, 1.12rem);
+      line-height: 1.75;
+      color: #3d3028;
+    }
+
+    .staff-detail-lessons li::before {
+      content: counter(lesson);
+      counter-increment: lesson;
+      position: absolute;
+      left: 0;
+      top: 0.1em;
+      font-family: "DotGothic16", sans-serif;
+      font-size: 0.85em;
+      color: #bf2f2f;
+    }
+
+    .staff-detail-fallback {
+      margin: 0;
       color: #8a4a3a;
+      font-size: 0.95rem;
     }
 
     footer {
@@ -294,6 +420,10 @@
       .staff-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+
+      .staff-detail-head {
+        align-items: flex-start;
+      }
     }
 
     @media (max-width: 520px) {
@@ -308,6 +438,11 @@
       .staff-avatar {
         width: 48px;
         height: 48px;
+      }
+
+      .staff-detail-avatar {
+        width: 60px;
+        height: 60px;
       }
     }
   </style>
@@ -342,23 +477,9 @@
         <p>コタツを囲む、小さな開発チーム</p>
       </div>
 
-      <div class="staff-grid fade-up" aria-label="AI社員紹介" id="staffGrid">
-        <article class="staff-card">
-          <div class="staff-avatar">
-            <img
-              src="https://raw.githubusercontent.com/kotatsusoftdev/kotatsu-soft-app/main/kotatsu-soft/ai-core/assets/avatars/nobuta.png"
-              alt="のぶ太社長"
-              width="56"
-              height="56"
-              loading="lazy"
-              decoding="async"
-            />
-          </div>
-          <p class="staff-name">のぶ太社長</p>
-          <p class="staff-role">アイデア出し・AI社員のしりぬぐい</p>
-          <p class="staff-persona">唯一の人間。AI社員に丸投げの素人社長。</p>
-        </article>
-      </div>
+      <div class="staff-grid fade-up" aria-label="社員紹介" id="staffGrid" role="listbox" aria-activedescendant=""></div>
+
+      <section class="staff-detail fade-up" id="staffDetail" aria-live="polite" hidden></section>
     </main>
 
     <footer>
@@ -379,6 +500,21 @@
       { role: "marketing", avatar: `${AVATAR_BASE}/marketing.png` },
     ];
 
+    const NOBUTA = {
+      id: "nobuta",
+      displayName: "のぶ太社長",
+      roleLabel: "アイデア出し・AI社員のしりぬぐい",
+      avatar: `${AVATAR_BASE}/nobuta.png`,
+      tone: "唯一の人間。AI社員に丸投げの素人社長。",
+      mindset: "",
+      lessons: null,
+      showLessons: false,
+    };
+
+    /** @type {Map<string, object>} */
+    const staffById = new Map();
+    let selectedId = null;
+
     function escapeHtml(value) {
       return String(value)
         .replaceAll("&", "&amp;")
@@ -388,65 +524,166 @@
         .replaceAll("'", "&#39;");
     }
 
-    function createErrorCard(role) {
-      const article = document.createElement("article");
-      article.className = "staff-card is-error";
-      article.innerHTML = `
-        <p class="staff-name">${escapeHtml(role)}</p>
-        <p class="staff-role">読み込みエラー</p>
-        <p class="staff-persona">紹介情報を取得できませんでした。</p>
-      `;
-      return article;
-    }
-
-    function createAgentCard(agentMeta, config) {
-      const agent = config?.agent || {};
-      const profile = agent.public_profile || {};
-      const persona = agent.persona || {};
-      const displayName = profile.display_name || agent.name || agentMeta.role;
-      const roleLabel = profile.role_label || agent.title || "";
-      const tone = persona.tone || "";
-      const mindset = persona.mindset || "";
-
-      if (!profile.display_name && !tone && !mindset) {
-        return createErrorCard(agentMeta.role);
-      }
-
-      const article = document.createElement("article");
-      article.className = "staff-card";
-      article.innerHTML = `
+    function createStaffCard(staff) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "staff-card";
+      button.id = `staff-card-${staff.id}`;
+      button.dataset.staffId = staff.id;
+      button.setAttribute("role", "option");
+      button.setAttribute("aria-selected", "false");
+      button.innerHTML = `
         <div class="staff-avatar">
           <img
-            src="${escapeHtml(agentMeta.avatar)}"
-            alt="${escapeHtml(displayName)}"
+            src="${escapeHtml(staff.avatar)}"
+            alt="${escapeHtml(staff.displayName)}"
             width="56"
             height="56"
             loading="lazy"
             decoding="async"
           />
         </div>
-        <p class="staff-name">${escapeHtml(displayName)}</p>
-        <p class="staff-role">${escapeHtml(roleLabel)}</p>
-        ${tone ? `<p class="staff-persona">${escapeHtml(tone)}</p>` : ""}
-        ${mindset ? `<p class="staff-persona">${escapeHtml(mindset)}</p>` : ""}
+        <p class="staff-name">${escapeHtml(staff.displayName)}</p>
+        <p class="staff-role">${escapeHtml(staff.roleLabel)}</p>
+      `;
+      button.addEventListener("click", () => selectStaff(staff.id));
+      return button;
+    }
+
+    function createErrorCard(role) {
+      const article = document.createElement("article");
+      article.className = "staff-card is-error";
+      article.innerHTML = `
+        <p class="staff-name">${escapeHtml(role)}</p>
+        <p class="staff-role">読み込みエラー</p>
       `;
       return article;
     }
 
-    async function loadAgentCard(agentMeta) {
-      try {
-        const response = await fetch(`${CONFIG_BASE}/${agentMeta.role}/config.yaml`, {
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+    function renderDetail(staff) {
+      const detail = document.getElementById("staffDetail");
+      if (!detail) return;
+
+      const personaParts = [staff.tone, staff.mindset].filter(Boolean);
+      const personaHtml = personaParts.length
+        ? personaParts.map((text) => `<p class="staff-detail-body">${escapeHtml(text)}</p>`).join("")
+        : `<p class="staff-detail-fallback">性格情報を取得できませんでした。</p>`;
+
+      let lessonsHtml = "";
+      if (staff.showLessons) {
+        if (Array.isArray(staff.lessons) && staff.lessons.length > 0) {
+          lessonsHtml = `
+            <div class="staff-detail-section">
+              <h3 class="staff-detail-label">教訓</h3>
+              <ol class="staff-detail-lessons">
+                ${staff.lessons.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+              </ol>
+            </div>
+          `;
+        } else {
+          lessonsHtml = `
+            <div class="staff-detail-section">
+              <h3 class="staff-detail-label">教訓</h3>
+              <p class="staff-detail-fallback">取得できませんでした。</p>
+            </div>
+          `;
         }
-        const text = await response.text();
-        const config = jsyaml.load(text);
-        return createAgentCard(agentMeta, config);
+      }
+
+      detail.hidden = false;
+      detail.innerHTML = `
+        <div class="staff-detail-head">
+          <div class="staff-detail-avatar">
+            <img
+              src="${escapeHtml(staff.avatar)}"
+              alt="${escapeHtml(staff.displayName)}"
+              width="72"
+              height="72"
+              decoding="async"
+            />
+          </div>
+          <div class="staff-detail-identity">
+            <h2 class="staff-detail-name">${escapeHtml(staff.displayName)}</h2>
+            <p class="staff-detail-role">${escapeHtml(staff.roleLabel)}</p>
+          </div>
+        </div>
+        <div class="staff-detail-section">
+          <h3 class="staff-detail-label">性格</h3>
+          ${personaHtml}
+        </div>
+        ${lessonsHtml}
+      `;
+    }
+
+    function selectStaff(id) {
+      const staff = staffById.get(id);
+      if (!staff) return;
+
+      selectedId = id;
+      const grid = document.getElementById("staffGrid");
+      if (grid) {
+        grid.setAttribute("aria-activedescendant", `staff-card-${id}`);
+        for (const card of grid.querySelectorAll(".staff-card[data-staff-id]")) {
+          const isSelected = card.dataset.staffId === id;
+          card.classList.toggle("is-selected", isSelected);
+          card.setAttribute("aria-selected", isSelected ? "true" : "false");
+        }
+      }
+      renderDetail(staff);
+    }
+
+    async function fetchYaml(url) {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const text = await response.text();
+      return jsyaml.load(text);
+    }
+
+    async function loadAgentStaff(agentMeta) {
+      try {
+        const [config, lessonsPayload] = await Promise.all([
+          fetchYaml(`${CONFIG_BASE}/${agentMeta.role}/config.yaml`),
+          fetchYaml(`${CONFIG_BASE}/${agentMeta.role}/lessons_learned.yaml`).catch((error) => {
+            console.error(`Failed to load lessons for ${agentMeta.role}:`, error);
+            return null;
+          }),
+        ]);
+
+        const agent = config?.agent || {};
+        const profile = agent.public_profile || {};
+        const persona = agent.persona || {};
+        const displayName = profile.display_name || agent.name || agentMeta.role;
+        const roleLabel = profile.role_label || agent.title || "";
+        const tone = persona.tone || "";
+        const mindset = persona.mindset || "";
+
+        if (!profile.display_name && !tone && !mindset) {
+          return { error: true, role: agentMeta.role };
+        }
+
+        const rawLessons = lessonsPayload?.lesson_items;
+        const lessons = Array.isArray(rawLessons)
+          ? rawLessons.map((item) => String(item).trim()).filter(Boolean)
+          : null;
+
+        return {
+          error: false,
+          staff: {
+            id: agentMeta.role,
+            displayName,
+            roleLabel,
+            avatar: agentMeta.avatar,
+            tone,
+            mindset,
+            lessons,
+            showLessons: true,
+          },
+        };
       } catch (error) {
         console.error(`Failed to load config for ${agentMeta.role}:`, error);
-        return createErrorCard(agentMeta.role);
+        return { error: true, role: agentMeta.role };
       }
     }
 
@@ -454,9 +691,31 @@
       const grid = document.getElementById("staffGrid");
       if (!grid || typeof jsyaml === "undefined") return;
 
-      const cards = await Promise.all(AI_AGENTS.map((agent) => loadAgentCard(agent)));
-      for (const card of cards) {
-        grid.appendChild(card);
+      grid.replaceChildren();
+      staffById.clear();
+
+      const results = await Promise.all(AI_AGENTS.map((agent) => loadAgentStaff(agent)));
+      let firstSelectableId = null;
+
+      for (const result of results) {
+        if (result.error) {
+          grid.appendChild(createErrorCard(result.role));
+          continue;
+        }
+        staffById.set(result.staff.id, result.staff);
+        grid.appendChild(createStaffCard(result.staff));
+        if (!firstSelectableId) {
+          firstSelectableId = result.staff.id;
+        }
+      }
+
+      staffById.set(NOBUTA.id, NOBUTA);
+      grid.appendChild(createStaffCard(NOBUTA));
+
+      if (firstSelectableId) {
+        selectStaff(firstSelectableId);
+      } else {
+        selectStaff(NOBUTA.id);
       }
     }
 

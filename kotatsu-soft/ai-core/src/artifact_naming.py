@@ -28,9 +28,17 @@ def spec_filename(artifact_stem: str) -> str:
     return f"spec_{artifact_stem}.md"
 
 
+def review_filename(artifact_stem: str) -> str:
+    return f"review_{artifact_stem}.md"
+
+
 def meeting_log_path(repo_root: Path, artifact_stem: str) -> Path:
     return repo_root / "shared" / "meeting" / meeting_log_filename(artifact_stem)
 
 
 def spec_path(repo_root: Path, artifact_stem: str) -> Path:
     return repo_root / "shared" / "specs" / spec_filename(artifact_stem)
+
+
+def review_path(repo_root: Path, artifact_stem: str) -> Path:
+    return repo_root / "shared" / "review" / review_filename(artifact_stem)

@@ -1,7 +1,10 @@
 import asyncio
+from pathlib import Path
 import yaml
 from abc import ABC, abstractmethod
 from typing import Any
+
+from lessons_store import build_lessons_instruction, coerce_lesson_items, load_lessons
 
 
 class BaseAgent(ABC):
@@ -9,6 +12,10 @@ class BaseAgent(ABC):
     LLM_MAX_RETRIES = 2
 
     def __init__(self, config_path: str, avatar_url: str, mention_id: str):
+        self.config_path = str(config_path)
+        self.agent_dir = Path(config_path).resolve().parent
+        self.agents_root = self.agent_dir.parent
+
         with open(config_path, "r", encoding="utf-8") as f:
             self.config = yaml.safe_load(f)
 
@@ -96,7 +103,7 @@ class BaseAgent(ABC):
             raise ValueError("output_format is missing in agent config")
 
         rules = "\n- ".join(criteria["decision_rules"])
-        return (
+        instruction = (
             f"あなたはシステム内の自律型エージェント「{self.name}（{self.title}）」です。\n"
             "論理的かつ客観的な判断を優先しつつ、やや会話調で読みやすい表現を使ってください。\n"
             "工数見積もりは行わず、実装の手軽さと実現性に集中してください。\n\n"
@@ -111,6 +118,20 @@ class BaseAgent(ABC):
             "【出力形式】\n"
             f"- {output_format}\n"
         )
+        lessons_block = self.build_lessons_instruction()
+        if lessons_block:
+            instruction = f"{instruction}\n{lessons_block}"
+        return instruction
+
+    def load_own_lessons(self) -> list[str]:
+        try:
+            payload = load_lessons(self.agents_root, self.role)
+            return coerce_lesson_items(payload)
+        except Exception:
+            return []
+
+    def build_lessons_instruction(self) -> str:
+        return build_lessons_instruction(self.load_own_lessons())
 
     @staticmethod
     def extract_text_from_response(response: Any) -> str:

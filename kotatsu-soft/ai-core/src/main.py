@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 from typing import Optional
 
+import aiohttp
 import discord
 from discord.ext import commands
 
@@ -12,6 +13,8 @@ from artifact_naming import build_artifact_stem
 from config import ConfigError, Config, get_config
 from meeting_chat_log import MeetingChatLogWriter, normalize_plain_text
 from orchestrator import DynamicOrchestrator, ProposalSelectView, build_president_final_message
+from post_mortem import LessonUpdate, format_lesson_items, run_post_mortem
+from spec_link_registry import get_latest_linked_game
 from agents.dev.agent import DevAgent
 from agents.marketing.agent import MarketingAgent
 from agents.pm.agent import PMAgent
@@ -29,7 +32,25 @@ bot = commands.Bot(
 
 _meeting_guard_lock = asyncio.Lock()
 _active_meeting_channel_ids: set[int] = set()
+_post_mortem_lock = asyncio.Lock()
+_post_mortem_running = False
 _config: Optional[Config] = None
+_DISCORD_MESSAGE_LIMIT = 1900
+_post_mortem_webhooks: dict[int, discord.Webhook] = {}
+_AGENT_AVATAR_URLS = {
+    "pm": (
+        "https://raw.githubusercontent.com/kotatsusoftdev/kotatsu-soft-app/main/"
+        "kotatsu-soft/ai-core/assets/avatars/pm.png"
+    ),
+    "dev": (
+        "https://raw.githubusercontent.com/kotatsusoftdev/kotatsu-soft-app/main/"
+        "kotatsu-soft/ai-core/assets/avatars/dev.png"
+    ),
+    "marketing": (
+        "https://raw.githubusercontent.com/kotatsusoftdev/kotatsu-soft-app/main/"
+        "kotatsu-soft/ai-core/assets/avatars/marketing.png"
+    ),
+}
 
 _PERSISTENT_VIEW_STORE_PATH = (
     Path(__file__).resolve().parents[2] / "shared" / "logs" / "proposal_views.json"
@@ -190,6 +211,247 @@ async def _try_reserve_meeting_channel(channel_id: int) -> bool:
 async def _release_meeting_channel(channel_id: int) -> None:
     async with _meeting_guard_lock:
         _active_meeting_channel_ids.discard(channel_id)
+
+
+async def _try_begin_post_mortem() -> bool:
+    global _post_mortem_running
+    async with _post_mortem_lock:
+        if _post_mortem_running:
+            return False
+        _post_mortem_running = True
+        return True
+
+
+async def _end_post_mortem() -> None:
+    global _post_mortem_running
+    async with _post_mortem_lock:
+        _post_mortem_running = False
+
+
+def _chunk_discord_text(text: str, limit: int = _DISCORD_MESSAGE_LIMIT) -> list[str]:
+    text = (text or "").strip()
+    if not text:
+        return []
+    if len(text) <= limit:
+        return [text]
+    chunks: list[str] = []
+    remaining = text
+    while remaining:
+        if len(remaining) <= limit:
+            chunks.append(remaining)
+            break
+        cut = remaining.rfind("\n", 0, limit)
+        if cut < limit // 2:
+            cut = limit
+        chunks.append(remaining[:cut].rstrip())
+        remaining = remaining[cut:].lstrip()
+    return chunks
+
+
+def build_post_mortem_proposal_message(latest: dict) -> str:
+    title = str(latest.get("game_title") or "").strip() or "(タイトル未設定)"
+    return (
+        "直近のゲームで反省会を始めますか？\n"
+        f"- game_id: `{latest.get('game_id')}`\n"
+        f"- タイトル: {title}\n"
+        f"- artifact_stem: `{latest.get('artifact_stem')}`"
+    )
+
+
+def format_post_mortem_system_messages(warnings: list[str]) -> list[str]:
+    messages: list[str] = ["✅ 反省会が完了しました。各AI社員が教訓を発表します。"]
+    if warnings:
+        warn_body = "⚠️ 警告:\n" + "\n".join(f"- {warning}" for warning in warnings)
+        messages.extend(_chunk_discord_text(warn_body))
+    return messages
+
+
+def format_post_mortem_agent_message(item: LessonUpdate) -> str:
+    return (
+        "今回の反省会で、自分の教訓をこう更新したよ。\n\n"
+        "**before**\n"
+        f"{format_lesson_items(item.before)}\n\n"
+        "**after**\n"
+        f"{format_lesson_items(item.after)}"
+    )
+
+
+async def _get_post_mortem_webhook(
+    channel: discord.TextChannel,
+) -> Optional[discord.Webhook]:
+    cached = _post_mortem_webhooks.get(channel.id)
+    if cached:
+        return cached
+
+    webhook_name = DynamicOrchestrator.WEBHOOK_NAME
+    try:
+        existing = await channel.webhooks()
+        reusable = next((wh for wh in existing if wh.name == webhook_name), None)
+        if reusable:
+            _post_mortem_webhooks[channel.id] = reusable
+            return reusable
+    except (discord.Forbidden, discord.HTTPException):
+        pass
+
+    try:
+        created = await channel.create_webhook(
+            name=webhook_name,
+            reason="Use webhook to render distinct AI agent voices in Discord",
+        )
+        _post_mortem_webhooks[channel.id] = created
+        return created
+    except (discord.Forbidden, discord.HTTPException):
+        return None
+
+
+async def _post_as_agent(
+    channel: discord.TextChannel,
+    *,
+    username: str,
+    avatar_url: str,
+    content: str,
+) -> None:
+    chunks = _chunk_discord_text(content)
+    webhook = await _get_post_mortem_webhook(channel)
+    if webhook and webhook.token:
+        try:
+            async with aiohttp.ClientSession() as session:
+                dynamic_webhook = discord.Webhook.from_url(webhook.url, session=session)
+                for chunk in chunks:
+                    await dynamic_webhook.send(
+                        content=chunk,
+                        username=username,
+                        avatar_url=avatar_url,
+                    )
+            return
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException) as exc:
+            _post_mortem_webhooks.pop(channel.id, None)
+            print(f"[main] post-mortem webhook send failed, fallback: {exc}")
+
+    for chunk in chunks:
+        await channel.send(f"**{username}**\n{chunk}")
+
+
+async def publish_post_mortem_results(
+    channel: discord.TextChannel,
+    updates: list[LessonUpdate],
+    warnings: list[str],
+) -> None:
+    for content in format_post_mortem_system_messages(warnings):
+        await channel.send(content)
+
+    for item in updates:
+        avatar_url = _AGENT_AVATAR_URLS.get(item.role, _AGENT_AVATAR_URLS["pm"])
+        await _post_as_agent(
+            channel,
+            username=item.name,
+            avatar_url=avatar_url,
+            content=format_post_mortem_agent_message(item),
+        )
+
+
+class PostMortemConfirmView(discord.ui.View):
+    def __init__(
+        self,
+        *,
+        game_id: str,
+        game_title: str,
+        artifact_stem: str,
+        game_path: str,
+        api_key: str,
+    ):
+        super().__init__(timeout=600)
+        self.game_id = game_id
+        self.game_title = game_title
+        self.artifact_stem = artifact_stem
+        self.game_path = game_path
+        self.api_key = api_key
+
+        start_button = discord.ui.Button(
+            label="はじめる",
+            style=discord.ButtonStyle.success,
+            custom_id="post_mortem_start",
+        )
+        start_button.callback = self._on_start
+        self.add_item(start_button)
+
+        cancel_button = discord.ui.Button(
+            label="やめる",
+            style=discord.ButtonStyle.secondary,
+            custom_id="post_mortem_cancel",
+        )
+        cancel_button.callback = self._on_cancel
+        self.add_item(cancel_button)
+
+    def _disable_buttons(self) -> None:
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+
+    async def _on_cancel(self, interaction: discord.Interaction) -> None:
+        self._disable_buttons()
+        if interaction.message is not None:
+            await interaction.message.edit(view=self)
+        await interaction.response.send_message("キャンセルしました。", ephemeral=False)
+        self.stop()
+
+    async def _on_start(self, interaction: discord.Interaction) -> None:
+        reserved = await _try_begin_post_mortem()
+        if not reserved:
+            await interaction.response.send_message(
+                "⏳ 反省会はすでに実行中です。完了までお待ちください。",
+                ephemeral=False,
+            )
+            return
+
+        self._disable_buttons()
+        if interaction.message is not None:
+            await interaction.message.edit(view=self)
+
+        await interaction.response.send_message(
+            f"🔄 `{self.game_id}` の教訓を更新中です…（少々お待ちください）",
+            ephemeral=False,
+        )
+
+        try:
+            updates, warnings = await asyncio.to_thread(
+                run_post_mortem,
+                artifact_stem=self.artifact_stem,
+                api_key=self.api_key,
+                game_path=self.game_path or None,
+            )
+            channel = interaction.channel
+            if isinstance(channel, discord.TextChannel):
+                await publish_post_mortem_results(channel, updates, warnings)
+        except Exception as exc:
+            await interaction.followup.send(f"[post_mortem] 失敗しました: {exc}")
+        finally:
+            await _end_post_mortem()
+            self.stop()
+
+
+async def handle_post_mortem_channel_message(message: discord.Message, cfg: Config) -> None:
+    async with _post_mortem_lock:
+        if _post_mortem_running:
+            await message.channel.send("⏳ 反省会実行中です。完了までお待ちください。")
+            return
+
+    latest = get_latest_linked_game()
+    if latest is None:
+        await message.channel.send(
+            "⚠️ 紐づいたゲームがありません。"
+            "`spec_game_links.json` で仕様書とゲームをリンクしてから再度送ってください。"
+        )
+        return
+
+    view = PostMortemConfirmView(
+        game_id=str(latest["game_id"]),
+        game_title=str(latest.get("game_title") or ""),
+        artifact_stem=str(latest["artifact_stem"]),
+        game_path=str(latest.get("game_path") or ""),
+        api_key=cfg.GEMINI_API_KEY,
+    )
+    await message.channel.send(build_post_mortem_proposal_message(latest), view=view)
 
 
 @bot.event
@@ -378,6 +640,9 @@ async def on_message(message: discord.Message):
             await run_meeting_round(message.content, meeting_channel)
         finally:
             await _release_meeting_channel(meeting_channel.id)
+    elif message.channel.id == cfg.POST_MORTEM_CHANNEL_ID:
+        print(f"[main] Received message in post-mortem channel: {message.content}")
+        await handle_post_mortem_channel_message(message, cfg)
 
     await bot.process_commands(message)
 

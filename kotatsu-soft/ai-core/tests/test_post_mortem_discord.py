@@ -1,0 +1,153 @@
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+from unittest.mock import AsyncMock
+
+import pytest
+
+import main
+from config import Config
+from post_mortem import LessonUpdate
+
+
+class FakeSourceChannel:
+    def __init__(self, channel_id: int):
+        self.id = channel_id
+        self.messages: list[Any] = []
+
+    async def send(self, content: str, **kwargs: Any) -> None:
+        self.messages.append({"content": content, "kwargs": kwargs})
+
+
+@pytest.mark.asyncio
+async def test_post_mortem_channel_proposes_latest_game(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = Config.load()
+    monkeypatch.setattr(main, "_config", cfg)
+    monkeypatch.setattr(main, "_post_mortem_running", False)
+
+    source_channel = FakeSourceChannel(cfg.POST_MORTEM_CHANNEL_ID)
+    message = SimpleNamespace(
+        author=SimpleNamespace(bot=False),
+        channel=source_channel,
+        content="反省会お願い",
+    )
+
+    monkeypatch.setattr(
+        main,
+        "get_latest_linked_game",
+        lambda: {
+            "game_id": "matatabi_chaos",
+            "game_title": "マタタビ大合唱",
+            "artifact_stem": "demo_stem",
+            "game_path": "game-projects/001_matatabi_chaos/src/index.html",
+        },
+    )
+    process_commands_mock = AsyncMock()
+    monkeypatch.setattr(main.bot, "process_commands", process_commands_mock)
+
+    await main.on_message(message)
+
+    assert source_channel.messages
+    proposal = source_channel.messages[0]
+    assert "matatabi_chaos" in proposal["content"]
+    assert "demo_stem" in proposal["content"]
+    assert "view" in proposal["kwargs"]
+    process_commands_mock.assert_awaited_once_with(message)
+
+
+@pytest.mark.asyncio
+async def test_post_mortem_channel_reports_missing_link(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = Config.load()
+    monkeypatch.setattr(main, "_config", cfg)
+    monkeypatch.setattr(main, "_post_mortem_running", False)
+    monkeypatch.setattr(main, "get_latest_linked_game", lambda: None)
+    monkeypatch.setattr(main.bot, "process_commands", AsyncMock())
+
+    source_channel = FakeSourceChannel(cfg.POST_MORTEM_CHANNEL_ID)
+    message = SimpleNamespace(
+        author=SimpleNamespace(bot=False),
+        channel=source_channel,
+        content="start",
+    )
+
+    await main.on_message(message)
+    assert "紐づいたゲームがありません" in source_channel.messages[0]["content"]
+
+
+def test_build_and_format_post_mortem_messages() -> None:
+    latest = {
+        "game_id": "matatabi_chaos",
+        "game_title": "マタタビ大合唱",
+        "artifact_stem": "stem_1",
+    }
+    proposal = main.build_post_mortem_proposal_message(latest)
+    assert "matatabi_chaos" in proposal
+    assert "stem_1" in proposal
+
+    system_messages = main.format_post_mortem_system_messages(["review missing"])
+    assert any("反省会が完了" in msg for msg in system_messages)
+    assert any("review missing" in msg for msg in system_messages)
+
+    update = LessonUpdate(
+        role="pm",
+        name="すずかちゃん(PM)",
+        before=["旧1", "旧2", "旧3"],
+        after=["新1", "新2", "新3"],
+        path=Path("agents/pm/lessons_learned.yaml"),
+    )
+    agent_message = main.format_post_mortem_agent_message(update)
+    assert "新1" in agent_message
+    assert "旧1" in agent_message
+
+
+@pytest.mark.asyncio
+async def test_publish_post_mortem_results_posts_as_each_agent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    posted: list[dict[str, str]] = []
+
+    class FakeChannel:
+        id = 123
+
+        async def send(self, content: str, **kwargs: Any) -> None:
+            posted.append({"username": "bot", "content": content})
+
+    async def fake_post_as_agent(channel, *, username: str, avatar_url: str, content: str):
+        posted.append({"username": username, "avatar_url": avatar_url, "content": content})
+
+    monkeypatch.setattr(main, "_post_as_agent", fake_post_as_agent)
+
+    updates = [
+        LessonUpdate(
+            role="pm",
+            name="すずかちゃん(PM)",
+            before=["旧PM"],
+            after=["新PM"],
+            path=Path("agents/pm/lessons_learned.yaml"),
+        ),
+        LessonUpdate(
+            role="dev",
+            name="スゴ杉くん(エンジニア)",
+            before=["旧Dev"],
+            after=["新Dev"],
+            path=Path("agents/dev/lessons_learned.yaml"),
+        ),
+        LessonUpdate(
+            role="marketing",
+            name="ヂャイアン(マーケ)",
+            before=["旧Mkt"],
+            after=["新Mkt"],
+            path=Path("agents/marketing/lessons_learned.yaml"),
+        ),
+    ]
+
+    await main.publish_post_mortem_results(FakeChannel(), updates, [])
+
+    assert posted[0]["username"] == "bot"
+    assert posted[1]["username"] == "すずかちゃん(PM)"
+    assert posted[2]["username"] == "スゴ杉くん(エンジニア)"
+    assert posted[3]["username"] == "ヂャイアン(マーケ)"
+    assert "新PM" in posted[1]["content"]
+    assert posted[1]["avatar_url"] == main._AGENT_AVATAR_URLS["pm"]
+    assert posted[2]["avatar_url"] == main._AGENT_AVATAR_URLS["dev"]
+    assert posted[3]["avatar_url"] == main._AGENT_AVATAR_URLS["marketing"]

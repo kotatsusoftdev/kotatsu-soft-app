@@ -96,3 +96,48 @@ python scripts/link_spec_to_game.py --spec spec_xxx.md --game-id matatabi_chaos 
 主要な `game-id` 例:
 
 - `matatabi_chaos`
+
+## 開発完了後の自動反省会（教訓更新）
+
+仕様・会議ログ・レビュー・完成コードを読み、各 AI 社員の教訓（1〜2文×3個）を進化させます。
+レビュー指摘を最優先し、具体→抽象化した再発防止則へ更新します（言い換えのみは禁止）。
+更新された教訓は次の企画会議の system instruction に自動で入り、テーマ非依存の原則として発言に反映されます（箇条書きの読み上げはしません）。
+
+- 出力先（`config.yaml` と同じ配置）:
+  - `ai-core/src/agents/pm/lessons_learned.yaml`
+  - `ai-core/src/agents/dev/lessons_learned.yaml`
+  - `ai-core/src/agents/marketing/lessons_learned.yaml`
+
+### 実行手順
+
+1. 仕様書・会議ログ・レビューが同じ `artifact_stem` で揃っていること
+2. できれば `spec_game_links.json` でゲーム本体へ紐づいていること（未紐づけなら `--game-path` を指定）
+3. `ai-core/.env` に `GEMINI_API_KEY` があること
+
+```bash
+cd kotatsu-soft/ai-core
+# venv 推奨（スクリプトは venv があれば自動で切り替えます）
+.\venv\Scripts\python.exe scripts/post_mortem.py --artifact-stem "テトリスと猫を掛け合わせたゲームを作って_20260725_124622"
+```
+
+保存せず差分だけ見る場合:
+
+```bash
+.\venv\Scripts\python.exe scripts/post_mortem.py --artifact-stem "テトリスと猫を掛け合わせたゲームを作って_20260725_124622" --dry-run
+```
+
+仕様ファイル名から起動する場合:
+
+```bash
+.\venv\Scripts\python.exe scripts/post_mortem.py --spec "spec_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.md"
+```
+
+### Discord 反省会チャンネルから起動
+
+1. Discord に反省会用テキストチャンネルを作成し、チャンネル ID を `.env` の `POST_MORTEM_CHANNEL_ID` に設定
+2. Bot を再起動
+3. そのチャンネルに何かメッセージを送る
+4. Bot が直近リンク済みゲーム（`game_id`）を提案するので、`はじめる` を押す
+5. 完了後、各 AI 社員（すずかちゃん / スゴ杉くん / ヂャイアン）名義で教訓 before/after が投稿される
+
+※ `artifact_stem` の手入力は不要です（`spec_game_links.json` の直近リンクから自動解決）。

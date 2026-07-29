@@ -29,6 +29,7 @@ class Config:
     MUCHABURI_CHANNEL_ID: int
     GEMINI_API_KEY: str
     MEETING_CHANNEL_ID: int
+    POST_MORTEM_CHANNEL_ID: int
     PRESIDENT_MENTION: str
 
     @classmethod
@@ -37,12 +38,14 @@ class Config:
         muchaburi_channel_id = _require_env("MUCHABURI_CHANNEL_ID")
         gemini_api_key = _require_env("GEMINI_API_KEY")
         meeting_channel_id = _require_env("MEETING_CHANNEL_ID")
+        post_mortem_channel_id = _require_env("POST_MORTEM_CHANNEL_ID")
         president_mention = _require_env("PRESIDENT_MENTION")
         return cls(
             DISCORD_TOKEN=discord_token,
             MUCHABURI_CHANNEL_ID=_validate_int(muchaburi_channel_id, "MUCHABURI_CHANNEL_ID"),
             GEMINI_API_KEY=gemini_api_key,
             MEETING_CHANNEL_ID=_validate_int(meeting_channel_id, "MEETING_CHANNEL_ID"),
+            POST_MORTEM_CHANNEL_ID=_validate_int(post_mortem_channel_id, "POST_MORTEM_CHANNEL_ID"),
             PRESIDENT_MENTION=president_mention,
         )
 
