@@ -7,6 +7,7 @@ import re
 from typing import Any, Optional
 
 from artifact_naming import meeting_log_path
+from phase_labels import phase_display_ja
 
 
 ROLE_META: dict[str, dict[str, str]] = {
@@ -188,7 +189,7 @@ class MeetingChatLogWriter:
         self._last_logged_phase = phase
         self.append(
             role="system",
-            message=f"フェーズ：{phase}",
+            message=f"フェーズ：{phase_display_ja(phase)}",
             msg_type="system",
             phase=phase,
             turn=turn,

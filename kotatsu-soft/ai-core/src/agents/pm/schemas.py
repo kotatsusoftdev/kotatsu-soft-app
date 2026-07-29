@@ -13,7 +13,7 @@ class PMDecision(BaseModel):
     phase: Literal["DIVERGENCE", "CONFLICT", "FINAL"] = Field(
         ...,
         description=(
-            "現在の会議フェーズ。ターンに応じて発散、衝突、最終集約のいずれかを表す。"
+            "現在の会議フェーズ。ターンに応じて発散、衝突、収束のいずれかを表す。"
         ),
     )
     next_action: Literal["CALL_AGENT", "FINISH_FOR_PRESIDENT"] = Field(

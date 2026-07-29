@@ -8,6 +8,7 @@ from google.genai import types
 from agents.base_agent import BaseAgent
 from agents.pm.schemas import PMDecision
 from artifact_naming import spec_path as build_spec_path
+from phase_labels import phase_display_ja
 from spec_link_registry import register_generated_spec
 
 
@@ -56,7 +57,7 @@ class PMAgent(BaseAgent):
                 "何を優先し、何を諦めるかを自然な言葉で整理してください。"
             )
         return (
-            "Turn 8〜10 の最終集約フェーズです。"
+            "Turn 8〜10 の収束フェーズです。"
             "比較を打ち切って1案に絞り、初見インパクト・拡散性・リトライしたくなるテンポを短く整理してください。"
             "FINISH_FOR_PRESIDENT を返し、final_recommendation / final_category / revision_guidance を必ず埋めてください。"
         )
@@ -191,7 +192,7 @@ class PMAgent(BaseAgent):
             f"{base_instruction}\n"
             f"{self.CALL_NAME_RULES}\n"
             "【進行ルール】\n"
-            f"1. 現在ターン: {current_turn}/{max_turns}。フェーズ: {phase_label}。{phase_instruction}\n"
+            f"1. 現在ターン: {current_turn}/{max_turns}。フェーズ: {phase_display_ja(phase_label)}（phaseフィールドは {phase_label}）。{phase_instruction}\n"
             "2. 原則は CALL_AGENT で議論を進める。"
             "Turn 1〜5 では絶対に FINISH_FOR_PRESIDENT を選ばない。\n"
             "3. CALL_AGENT の場合は target_agent と instruction_for_target を必ず設定し、抽象論ではなく具体的な比較質問を出す。\n"
@@ -202,9 +203,9 @@ class PMAgent(BaseAgent):
             "安心材料として受け止めたうえで次の論点（演出・見た目インパクト等）へ自然に進める。\n"
             "7. 『全部盛り』は不可。取捨選択や優先順位は必要だが、毎ターン同じ型で機械的に書かず自然な会話として述べる。\n"
             "8. Turn 1〜5 は発散専用で、毎ターン別案の追加とエンジニアへの問いかけを必須化。"
-            "Turn 6〜7 は複数案の衝突/比較。Turn 8〜10 は新規拡張禁止で最終集約。\n"
+            "Turn 6〜7 は複数案の衝突/比較。Turn 8〜10 は新規拡張禁止で収束。\n"
             f"9. 残りターンは {remaining_turns} 回。残り3回以下では、文脈に馴染む言い方で収束を促してよい（固定文のコピペは禁止）。\n"
-            "10. phase フィールドは現在フェーズ名を返し、FINISH_FOR_PRESIDENT 時は final_recommendation / final_category / revision_guidance を必ず埋める。\n"
+            "10. phase フィールドは DIVERGENCE / CONFLICT / FINAL のいずれかを返し、FINISH_FOR_PRESIDENT 時は final_recommendation / final_category / revision_guidance を必ず埋める。\n"
             "11. speech の可読性を最優先し、壁テキストを避ける。要約や取捨選択は箇条書きと太字を使い、話題ごとに空行を入れる。\n"
             f"12. 早期終了許可条件: current_turn>=6 かつ マーケ/開発の両視点出揃い かつ 複数案の比較・トレードオフ議論済み。判定={can_finish_early}。\n"
             "13. 会議中は社長への途中確認・途中相談をしない。社長への呼びかけは FINISH_FOR_PRESIDENT で最終提出するときだけに限定する。\n"

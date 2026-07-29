@@ -62,6 +62,10 @@ def test_meeting_chat_log_writer_writes_jsonl(tmp_path: Path, monkeypatch: pytes
     assert first["role"] == "system"
     assert first["id"] == "msg_000"
 
+    phase_line = __import__("json").loads(lines[2])
+    assert phase_line["message"] == "フェーズ：発散"
+    assert phase_line["phase"] == "DIVERGENCE"
+
     reopened = MeetingChatLogWriter.open_existing(writer.path)
     message_id = reopened.log_decision(decision="go", phase="FINAL", turn=10, reply_to="msg_004")
     payload = __import__("json").loads(reopened.path.read_text(encoding="utf-8").splitlines()[-1])

@@ -16,3 +16,6 @@ logs/*.log
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local desktop/container runtime artifacts (do not commit cookies/session data)
+webtop-config/

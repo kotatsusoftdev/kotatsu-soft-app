@@ -9,6 +9,7 @@ from agents.base_agent import BaseAgent
 from agents.pm.agent import PMAgent
 from agents.pm.schemas import PMDecision
 from meeting_chat_log import MeetingChatLogWriter
+from phase_labels import phase_display_ja
 
 
 class DynamicOrchestrator:
@@ -406,7 +407,7 @@ class DynamicOrchestrator:
             if phase_drift:
                 await channel.send(
                     "⚠️ 進行フェーズがターン目標から逸脱しています。"
-                    f" Turn {current_turn} は {expected_phase} フェーズとして強制収束モードへ移行します。"
+                    f" Turn {current_turn} は {phase_display_ja(expected_phase)} フェーズとして強制収束モードへ移行します。"
                 )
                 force_convergence_next_turn = True
                 decision.phase = expected_phase
