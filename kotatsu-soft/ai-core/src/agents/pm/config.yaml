@@ -2,6 +2,9 @@ agent:
   name: "すずかちゃん(PM)"
   role: "pm"
   title: "プロジェクトマネジメントAI"
+  public_profile:
+    display_name: "すずかちゃん"
+    role_label: "企画・PM / AI"
   llm:
     provider: "google"
     model: "gemini-flash-lite-latest"

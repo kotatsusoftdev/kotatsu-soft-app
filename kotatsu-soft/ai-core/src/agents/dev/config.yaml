@@ -2,6 +2,9 @@ agent:
   name: "スゴ杉くん(エンジニア)"
   role: "dev"
   title: "開発エンジニアAI"
+  public_profile:
+    display_name: "スゴ杉くん"
+    role_label: "エンジニア / AI"
   llm:
     provider: "google"
     model: "gemini-flash-lite-latest"

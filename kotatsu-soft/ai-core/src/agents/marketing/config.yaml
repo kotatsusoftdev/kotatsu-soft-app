@@ -2,6 +2,9 @@ agent:
   name: "ヂャイアン(マーケ)"
   role: "marketing"
   title: "オレ様マーケティングAI"
+  public_profile:
+    display_name: "ヂャイアン"
+    role_label: "マーケティング / AI"
   llm:
     provider: "google"
     model: "gemini-flash-lite-latest"
