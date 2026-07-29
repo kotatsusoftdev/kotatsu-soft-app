@@ -16,6 +16,3 @@ logs/*.log
 # OS files
 .DS_Store
 Thumbs.db
-
-# Local desktop/container runtime artifacts
-webtop-config/
