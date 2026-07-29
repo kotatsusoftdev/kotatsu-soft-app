@@ -12,7 +12,8 @@
   - index.html がポータルページ
   - 001_matatabi_chaos/ がゲーム本体
 - shared/
-  - 仕様書やログなどの共通出力
+  - 仕様書・議事録・プレイテストレビュー・ログなどの共通出力
+  - review/ にテストプレイ指摘と修正履歴（`review_*.md`）を保管
 
 ## GitHub Pages 公開
 
@@ -72,7 +73,7 @@ python src/main.py
 
 - ai-core/ は Discord Bot の起動と AI 制御を担います
 - game-projects/ はゲーム画面とポータルを管理します
-- shared/ は仕様書やログなどの共通出力を格納します
+- shared/ は仕様書・議事録・プレイテストレビュー（`shared/review/`）・ログなどの共通出力を格納します
 
 ## 仕様書とゲームの紐づけ管理
 
