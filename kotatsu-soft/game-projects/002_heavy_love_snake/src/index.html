@@ -1,0 +1,2164 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>重愛パニック！ ～うっとり消滅デイズ～</title>
+  <style>
+    :root {
+      --ink: #3a1f2e;
+      --accent: #e83a6e;
+      --warm: #fff5f8;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      background:
+        radial-gradient(ellipse at 70% 20%, rgba(255, 140, 180, 0.35), transparent 45%),
+        radial-gradient(ellipse at 15% 80%, rgba(255, 200, 120, 0.28), transparent 40%),
+        linear-gradient(160deg, #2a1020 0%, #4a1a32 45%, #1a0c18 100%);
+      color: var(--ink);
+      font-family: "Trebuchet MS", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    .wrap {
+      width: min(96vw, 1100px);
+      display: grid;
+      gap: 10px;
+      justify-items: center;
+    }
+
+    .topbar {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .home-link {
+      text-decoration: none;
+      color: #ffd0e0;
+      border: 1px solid rgba(255, 180, 200, 0.35);
+      background: rgba(60, 20, 40, 0.72);
+      border-radius: 999px;
+      padding: 6px 11px;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      transition: background 140ms ease, transform 140ms ease;
+    }
+
+    .home-link:hover,
+    .home-link:focus-visible {
+      background: rgba(90, 30, 55, 0.9);
+      transform: translateY(-1px);
+    }
+
+    .brand {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: #ffb0c8;
+      opacity: 0.95;
+    }
+
+    canvas {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border: 2px solid rgba(255, 140, 180, 0.35);
+      border-radius: 14px;
+      background: #1a0c18;
+      box-shadow:
+        0 18px 48px rgba(20, 4, 12, 0.55),
+        0 0 0 1px rgba(255, 200, 220, 0.18) inset;
+      display: block;
+    }
+
+    .hint {
+      font-size: 12px;
+      letter-spacing: 0.03em;
+      color: #ffc0d4;
+      opacity: 0.9;
+      text-align: center;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="home-link" href="../../index.html">コタツ・ソフト へ戻る</a>
+      <div class="brand">HEAVY LOVE PANIC</div>
+    </div>
+    <canvas id="game" width="1280" height="720" aria-label="重愛パニック"></canvas>
+    <div class="hint">あなたはアイドル／相手はファン ・ マウス移動 ・ 左クリック攻撃 ・ 右クリック必殺（暴走中はアンコール） ・ サイリウム回収でSP</div>
+  </div>
+
+  <script src="../../common/stats.js"></script>
+  <script src="../../common/storage.js"></script>
+  <script>
+    (() => {
+      "use strict";
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+
+      const W = canvas.width;
+      const H = canvas.height;
+      const GAME_ID = "heavy_love_snake";
+      const HIGH_SCORE_KEY = "highScore";
+      const WORLD_W = 3200;
+      const WORLD_H = H;
+      const GROUND_Y = H - 80;
+      const TIME_LIMIT = 30;
+      const COMBO_WINDOW = 1.2;
+      const COMBO_MAX = 8;
+      const FEVER_NEED = 5;
+      const TRAIL_MAX = 28;
+      const TRAIL_LIFE = 2.4;
+      const TRAIL_SPACING = 28;
+      const ULTIMATE_TIME = 5;
+      const ECHO_LIFE = 1.2;
+      const ECHO_RADIUS = 70;
+      const CLEAR_BONUS = 50;
+      const OVERLOAD_MOVE_MUL = 0.28;
+      const OVERLOAD_ENEMY_MUL = 1.55;
+      const CRUSH_RADIUS = 95;
+      const CLEARING_DUR = 2.4;
+      const GAZE_RADIUS = 120;
+      const ARRIVE_STOP = 32;
+
+      const STATE = {
+        TITLE: "TITLE",
+        PLAYING: "PLAYING",
+        CLEARING: "CLEARING",
+        RESULT: "RESULT",
+      };
+
+      const POP_TEXTS = [
+        "推しっ！",
+        "サインください！",
+        "尊い…",
+        "うっとり…",
+        "神推し！！",
+        "好きすぎて滅",
+        "ペンライト振っちゃう！",
+        "アイドル最高〜",
+      ];
+
+      const keys = Object.create(null);
+      const keysJust = Object.create(null);
+
+      let state = STATE.TITLE;
+      let lastTime = 0;
+      let player = null;
+      let bullets = [];
+      let enemies = [];
+      let particles = [];
+      let popups = [];
+      let metsuFx = [];
+      let trails = [];
+      let echoes = [];
+      let glowsticks = [];
+      let cameraX = 0;
+      let score = 0;
+      let bestScore = 0;
+      let isNewRecord = false;
+      let timeLeft = TIME_LIMIT;
+      let spawnTimer = 0;
+      let wave = 1;
+      let specialFlash = 0;
+      let specialEncore = false;
+      let playCountSent = false;
+      let audioCtx = null;
+      let masterGain = null;
+      let combo = 0;
+      let comboTimer = 0;
+      let maxCombo = 0;
+      let feverTimer = 0;
+      let shake = 0;
+      let lastTrailX = 0;
+      let lastTrailY = 0;
+      let killsThisWaveCheck = 0;
+      let heartbeatAcc = 0;
+      let heartbeatPulse = 0;
+      let bgmOn = false;
+      let cleared = false;
+      let clearBonus = 0;
+      let crushTick = 0;
+      let overloadHearts = [];
+      let clearingTimer = 0;
+      let clearingScore = 0;
+      let clearMetsuPops = [];
+      let mouseSX = W * 0.55;
+      let mouseSY = H * 0.5;
+      let mouseShoot = false;
+      let mouseSpecialJust = false;
+      let mouseDashJust = false;
+
+      const touch = {
+        shoot: false,
+        special: false,
+        dash: false,
+        dashJust: false,
+        startTap: false,
+        aimId: null,
+        btnIds: Object.create(null),
+      };
+
+      const PAD = {
+        shootX: W - 110,
+        shootY: H - 100,
+        specialX: W - 110,
+        specialY: H - 200,
+        dashX: W - 210,
+        dashY: H - 100,
+        btnR: 42,
+      };
+
+      const sendPlayCount = window.KotatsuStats && window.KotatsuStats.sendPlayCount;
+      const storage = window.KotatsuStorage || null;
+
+      function loadBestScore() {
+        if (!storage || typeof storage.get !== "function") return 0;
+        const saved = storage.get(GAME_ID, HIGH_SCORE_KEY);
+        const num = Number(saved);
+        if (!Number.isFinite(num) || num < 0) return 0;
+        return Math.trunc(num);
+      }
+
+      function saveBestScore(value) {
+        if (!storage || typeof storage.set !== "function") return false;
+        return storage.set(GAME_ID, HIGH_SCORE_KEY, value);
+      }
+
+      function ensureAudio() {
+        if (audioCtx) {
+          if (audioCtx.state === "suspended") audioCtx.resume();
+          return audioCtx;
+        }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        audioCtx = new AC();
+        masterGain = audioCtx.createGain();
+        masterGain.gain.value = 0.55;
+        masterGain.connect(audioCtx.destination);
+        return audioCtx;
+      }
+
+      function tone(freq, dur, type, gain, when, slideTo) {
+        const ac = ensureAudio();
+        if (!ac || !masterGain) return;
+        const t0 = (when != null ? when : 0) + ac.currentTime;
+        const o = ac.createOscillator();
+        const g = ac.createGain();
+        o.type = type || "square";
+        o.frequency.setValueAtTime(freq, t0);
+        if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t0 + dur);
+        g.gain.setValueAtTime(Math.max(0.0001, gain || 0.04), t0);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        o.connect(g);
+        g.connect(masterGain);
+        o.start(t0);
+        o.stop(t0 + dur + 0.03);
+      }
+
+      function noiseBurst(dur, gain) {
+        const ac = ensureAudio();
+        if (!ac || !masterGain) return;
+        const n = Math.max(1, (ac.sampleRate * dur) | 0);
+        const buf = ac.createBuffer(1, n, ac.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / n);
+        const src = ac.createBufferSource();
+        const g = ac.createGain();
+        const f = ac.createBiquadFilter();
+        src.buffer = buf;
+        f.type = "bandpass";
+        f.frequency.value = 1800;
+        f.Q.value = 0.8;
+        g.gain.setValueAtTime(gain || 0.03, ac.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur);
+        src.connect(f);
+        f.connect(g);
+        g.connect(masterGain);
+        src.start();
+      }
+
+      function sfxShoot() {
+        tone(920, 0.05, "square", 0.035, 0, 1400);
+        noiseBurst(0.04, 0.02);
+      }
+
+      function sfxMetsu(comboLv) {
+        const boost = Math.min(4, comboLv || 1);
+        tone(120, 0.16, "sawtooth", 0.06);
+        tone(280 + boost * 20, 0.1, "triangle", 0.04, 0.02);
+        tone(720 + boost * 40, 0.12, "sine", 0.035, 0.04);
+        tone(1100, 0.08, "triangle", 0.025, 0.08);
+      }
+
+      function sfxDash() {
+        tone(180, 0.12, "sawtooth", 0.04, 0, 520);
+        noiseBurst(0.08, 0.025);
+      }
+
+      function sfxSpecial() {
+        tone(220, 0.08, "triangle", 0.045, 0);
+        tone(330, 0.08, "triangle", 0.045, 0.07);
+        tone(440, 0.08, "triangle", 0.045, 0.14);
+        tone(660, 0.14, "sine", 0.05, 0.22);
+        tone(880, 0.18, "sine", 0.04, 0.3);
+      }
+
+      function sfxHurt() {
+        tone(90, 0.14, "sawtooth", 0.05, 0, 60);
+        noiseBurst(0.1, 0.03);
+      }
+
+      function sfxOverload() {
+        tone(70, 0.28, "sawtooth", 0.06, 0, 40);
+        tone(160, 0.2, "square", 0.03, 0.05);
+      }
+
+      function sfxStart() {
+        tone(392, 0.09, "triangle", 0.05, 0);
+        tone(523, 0.09, "triangle", 0.05, 0.09);
+        tone(659, 0.14, "triangle", 0.055, 0.18);
+      }
+
+      function sfxEnd() {
+        tone(392, 0.12, "triangle", 0.045, 0);
+        tone(330, 0.12, "triangle", 0.04, 0.1);
+        tone(262, 0.22, "sawtooth", 0.04, 0.2);
+      }
+
+      function sfxClear() {
+        tone(392, 0.1, "triangle", 0.05, 0);
+        tone(523, 0.1, "triangle", 0.05, 0.1);
+        tone(659, 0.1, "triangle", 0.055, 0.2);
+        tone(784, 0.12, "sine", 0.05, 0.3);
+        tone(1046, 0.2, "sine", 0.045, 0.42);
+        tone(1318, 0.25, "triangle", 0.04, 0.55);
+      }
+
+      function sfxHeartbeat() {
+        tone(55, 0.08, "sine", 0.045);
+        tone(70, 0.05, "sine", 0.03, 0.1);
+      }
+
+      function lovePressure() {
+        return clamp(1 - timeLeft / TIME_LIMIT, 0, 1);
+      }
+
+      function lovePhase() {
+        const p = lovePressure();
+        if (timeLeft <= ULTIMATE_TIME) return 4;
+        if (p >= 0.66) return 3;
+        if (p >= 0.33) return 2;
+        return 1;
+      }
+
+      function isUltimate() {
+        return timeLeft <= ULTIMATE_TIME;
+      }
+
+      function clamp(v, a, b) {
+        return Math.max(a, Math.min(b, v));
+      }
+
+      function dist(ax, ay, bx, by) {
+        const dx = ax - bx;
+        const dy = ay - by;
+        return Math.hypot(dx, dy);
+      }
+
+      function rand(a, b) {
+        return a + Math.random() * (b - a);
+      }
+
+      function pick(arr) {
+        return arr[(Math.random() * arr.length) | 0];
+      }
+
+      function createPlayer() {
+        return {
+          x: 200,
+          y: GROUND_Y - 40,
+          w: 36,
+          h: 48,
+          vx: 0,
+          vy: 0,
+          facing: 1,
+          aimAngle: 0,
+          hp: 100,
+          maxHp: 100,
+          speed: 450,
+          overload: 0,
+          overloadMax: 100,
+          overloadLock: 0,
+          special: 0,
+          specialMax: 100,
+          shootCooldown: 0,
+          dashTimer: 0,
+          dashCd: 0,
+          invuln: 0,
+          hitFlash: 0,
+        };
+      }
+
+      function createEnemy(x, y, hpMul) {
+        const maxHp = Math.round(28 * (hpMul || 1));
+        return {
+          x,
+          y,
+          w: 40,
+          h: 44,
+          vx: 0,
+          vy: 0,
+          hp: maxHp,
+          maxHp,
+          speed: rand(160, 240) + wave * 10,
+          hitCd: 0,
+          stun: 0,
+          stage: 0,
+        };
+      }
+
+      function loveStage(e) {
+        const r = e.hp / e.maxHp;
+        if (r > 0.66) return 0;
+        if (r > 0.33) return 1;
+        return 2;
+      }
+
+      function spawnBurst(x, y, count, color) {
+        for (let i = 0; i < count; i++) {
+          const a = rand(0, Math.PI * 2);
+          const sp = rand(80, 340);
+          particles.push({
+            x,
+            y,
+            vx: Math.cos(a) * sp,
+            vy: Math.sin(a) * sp - 40,
+            life: rand(0.4, 0.9),
+            maxLife: 0.9,
+            size: rand(4, 10),
+            color: color || "#ff5a8a",
+            heart: Math.random() < 0.7,
+          });
+        }
+      }
+
+      function spawnMetsuEffect(x, y) {
+        metsuFx.push({
+          x,
+          y,
+          life: 0.7,
+          maxLife: 0.7,
+          ring: 0,
+        });
+        shake = Math.max(shake, 0.28);
+        sfxMetsu(combo);
+      }
+
+      function spawnEcho(x, y) {
+        echoes.push({
+          x,
+          y,
+          life: ECHO_LIFE,
+          maxLife: ECHO_LIFE,
+          r: ECHO_RADIUS,
+          tick: 0,
+        });
+      }
+
+      function addPopup(x, y, text) {
+        popups.push({
+          x,
+          y,
+          text,
+          life: 1.1,
+          vy: -40,
+        });
+      }
+
+      function registerKill(e) {
+        if (comboTimer > 0) combo += 1;
+        else combo = 1;
+        comboTimer = COMBO_WINDOW;
+        if (combo > maxCombo) maxCombo = combo;
+        const mult = Math.min(COMBO_MAX, combo);
+        const rushBonus = isUltimate() ? 2 : 1 + Math.floor(lovePressure() * 0.5);
+        const gain = mult * rushBonus;
+        score += gain;
+        killsThisWaveCheck += 1;
+        if (killsThisWaveCheck >= 5) {
+          killsThisWaveCheck = 0;
+          wave = Math.min(12, wave + 1);
+        }
+        if (combo >= FEVER_NEED) {
+          feverTimer = Math.max(feverTimer, 2.5);
+        }
+        const spGain = 12 + Math.min(combo, 6) + (player.overloadLock > 0 ? 8 : 0);
+        player.special = Math.min(player.specialMax, player.special + spGain);
+        const burstCount = 14 + Math.round(lovePressure() * 12);
+        spawnBurst(e.x, e.y, burstCount, "#ff4d88");
+        spawnMetsuEffect(e.x, e.y);
+        spawnEcho(e.x, e.y);
+        spawnGlowstick(e.x, e.y);
+        addPopup(e.x, e.y - 20, pick(POP_TEXTS));
+        if (combo >= 2) addPopup(e.x + 30, e.y - 50, "滅×" + combo + " (+" + gain + ")");
+      }
+
+      function spawnGlowstick(x, y) {
+        if (glowsticks.length > 24) glowsticks.shift();
+        glowsticks.push({
+          x: x + rand(-12, 12),
+          y: y + rand(-8, 8),
+          life: 4.5,
+          maxLife: 4.5,
+          hue: pick(["#66ffcc", "#ff66cc", "#66ccff", "#ffe066", "#ff8866"]),
+          angle: rand(-0.4, 0.4),
+        });
+      }
+
+      function dropTrail(x, y) {
+        if (!player || player.overloadLock > 0) return;
+        if (trails.length >= TRAIL_MAX) trails.shift();
+        trails.push({
+          x,
+          y,
+          life: TRAIL_LIFE,
+          maxLife: TRAIL_LIFE,
+          hitCd: 0,
+        });
+        lastTrailX = x;
+        lastTrailY = y;
+      }
+
+      function resetRun() {
+        player = createPlayer();
+        bullets = [];
+        enemies = [];
+        particles = [];
+        popups = [];
+        metsuFx = [];
+        trails = [];
+        echoes = [];
+        glowsticks = [];
+        cameraX = 0;
+        score = 0;
+        isNewRecord = false;
+        timeLeft = TIME_LIMIT;
+        spawnTimer = 0.25;
+        wave = 1;
+        specialFlash = 0;
+        playCountSent = false;
+        combo = 0;
+        comboTimer = 0;
+        maxCombo = 0;
+        feverTimer = 0;
+        shake = 0;
+        killsThisWaveCheck = 0;
+        heartbeatAcc = 0;
+        heartbeatPulse = 0;
+        bgmOn = true;
+        cleared = false;
+        clearBonus = 0;
+        crushTick = 0;
+        overloadHearts = [];
+        clearingTimer = 0;
+        clearingScore = 0;
+        clearMetsuPops = [];
+        mouseShoot = false;
+        mouseSpecialJust = false;
+        mouseDashJust = false;
+        lastTrailX = player.x;
+        lastTrailY = player.y;
+        mouseSX = W * 0.55;
+        mouseSY = H * 0.5;
+        touch.shoot = false;
+        touch.special = false;
+        touch.dash = false;
+        touch.dashJust = false;
+        touch.aimId = null;
+
+        for (let i = 0; i < 7; i++) {
+          enemies.push(createEnemy(480 + i * 140, GROUND_Y - 44 - (i % 3) * 40, 1));
+        }
+      }
+
+      function startGame() {
+        ensureAudio();
+        resetRun();
+        state = STATE.PLAYING;
+        if (!playCountSent && typeof sendPlayCount === "function") {
+          sendPlayCount("heavy_love_snake");
+          playCountSent = true;
+        }
+        sfxStart();
+      }
+
+      function mouseWorld() {
+        return { x: mouseSX + cameraX, y: mouseSY };
+      }
+
+      function runClearFinale() {
+        addPopup(player.x, player.y - 80, "好きすぎて滅！！");
+        const leftover = enemies.slice();
+        for (const e of leftover) {
+          registerKill(e);
+          spawnMetsuEffect(e.x, e.y);
+        }
+        enemies = [];
+        for (let i = 0; i < 70; i++) {
+          particles.push({
+            x: cameraX + rand(0, W),
+            y: rand(-80, H * 0.45),
+            vx: rand(-90, 90),
+            vy: rand(60, 280),
+            life: rand(1.4, 2.6),
+            maxLife: 2.6,
+            size: rand(8, 20),
+            color: pick(["#ff4d88", "#ff80c0", "#ffe066", "#ff2d6e", "#ffffff"]),
+            heart: Math.random() < 0.85,
+          });
+        }
+        clearMetsuPops = [];
+        for (let i = 0; i < 10; i++) {
+          clearMetsuPops.push({
+            delay: i * 0.14,
+            life: 0.9,
+            maxLife: 0.9,
+            x: rand(W * 0.15, W * 0.85),
+            y: rand(H * 0.15, H * 0.55),
+            size: rand(0.7, 1.8),
+            started: false,
+          });
+        }
+        spawnMetsuEffect(player.x, player.y - 20);
+        shake = Math.max(shake, 0.55);
+      }
+
+      function beginClearSequence() {
+        cleared = true;
+        bgmOn = false;
+        runClearFinale();
+        clearBonus = CLEAR_BONUS;
+        clearingScore = score;
+        score += clearBonus;
+        clearingTimer = CLEARING_DUR;
+        sfxClear();
+        state = STATE.CLEARING;
+      }
+
+      function finishClearToResult() {
+        state = STATE.RESULT;
+        bestScore = loadBestScore();
+        if (score > bestScore) {
+          bestScore = score;
+          isNewRecord = true;
+          saveBestScore(bestScore);
+        } else {
+          isNewRecord = false;
+        }
+      }
+
+      function endGame(reason) {
+        cleared = reason === "clear";
+        bgmOn = false;
+        if (cleared) {
+          beginClearSequence();
+          return;
+        }
+        clearBonus = 0;
+        sfxEnd();
+        state = STATE.RESULT;
+        bestScore = loadBestScore();
+        if (score > bestScore) {
+          bestScore = score;
+          isNewRecord = true;
+          saveBestScore(bestScore);
+        } else {
+          isNewRecord = false;
+        }
+      }
+
+      function readGamepad() {
+        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        let pad = null;
+        for (let i = 0; i < pads.length; i++) {
+          if (pads[i]) {
+            pad = pads[i];
+            break;
+          }
+        }
+        if (!pad) {
+          return { shoot: false, special: false, dash: false, start: false };
+        }
+        return {
+          shoot: !!(pad.buttons[0] && pad.buttons[0].pressed),
+          special: !!(pad.buttons[1] && pad.buttons[1].pressed),
+          dash: !!(pad.buttons[2] && pad.buttons[2].pressed),
+          start: !!(pad.buttons[9] && pad.buttons[9].pressed) || !!(pad.buttons[8] && pad.buttons[8].pressed),
+        };
+      }
+
+      function getCursorMove(p) {
+        const m = mouseWorld();
+        const dx = m.x - p.x;
+        const dy = m.y - p.y;
+        const d = Math.hypot(dx, dy) || 1;
+        p.aimAngle = Math.atan2(dy, dx);
+        p.facing = Math.cos(p.aimAngle) >= 0 ? 1 : -1;
+        if (d < ARRIVE_STOP) {
+          return { mx: 0, my: 0, dist: d };
+        }
+        const factor = clamp((d - ARRIVE_STOP) / 140, 0.2, 1);
+        return { mx: (dx / d) * factor, my: (dy / d) * factor, dist: d };
+      }
+
+      function shootHeart() {
+        if (!player || player.overloadLock > 0) return;
+        if (player.shootCooldown > 0) return;
+        const fever = feverTimer > 0;
+        const phase = lovePhase();
+        const pressure = lovePressure();
+        let cooldown = 0.1 - pressure * 0.03;
+        if (fever) cooldown *= 0.7;
+        if (phase >= 4) cooldown *= 0.75;
+        player.shootCooldown = Math.max(0.045, cooldown);
+        player.overload = Math.min(player.overloadMax, player.overload + (fever ? 2.8 : 3.8 - pressure * 0.6));
+        if (player.overload >= player.overloadMax) {
+          player.overloadLock = 1.8;
+          player.overload = player.overloadMax;
+          feverTimer = 0;
+          addPopup(player.x, player.y - 50, "ファンの愛が押し寄せる…！");
+          sfxOverload();
+        }
+
+        let count = 1;
+        let spread = 0;
+        let dmg = 10 + Math.round(pressure * 4);
+        let bulletSpeed = 620 + pressure * 220;
+        let r = 10 + pressure * 4;
+        if (fever) {
+          dmg += 2;
+          bulletSpeed += 80;
+        }
+        if (phase >= 2) count = 2;
+        if (phase >= 3) {
+          count = 3;
+          spread = 0.22;
+          dmg += 2;
+          r += 2;
+        }
+        if (phase >= 4) {
+          count = 3;
+          spread = 0.28;
+          dmg += 4;
+          r += 3;
+          bulletSpeed += 80;
+        }
+
+        const baseAngle = player.aimAngle;
+        for (let i = 0; i < count; i++) {
+          let ang = baseAngle;
+          if (count === 2) ang += (i === 0 ? -0.12 : 0.12);
+          else if (count === 3) ang += (i - 1) * spread;
+          bullets.push({
+            x: player.x + Math.cos(ang) * 22,
+            y: player.y + Math.sin(ang) * 22,
+            vx: Math.cos(ang) * bulletSpeed,
+            vy: Math.sin(ang) * bulletSpeed,
+            r,
+            life: 1.15,
+            dmg,
+            glow: phase >= 3,
+          });
+        }
+        if (phase >= 3) {
+          spawnBurst(
+            player.x + Math.cos(baseAngle) * 18,
+            player.y + Math.sin(baseAngle) * 18,
+            3 + phase,
+            "#ff8ab8"
+          );
+        }
+        sfxShoot();
+      }
+
+      function tryDash(mx, my) {
+        if (!player || player.overloadLock > 0) return;
+        if (player.dashCd > 0 || player.dashTimer > 0) return;
+        let dx = mx;
+        let dy = my;
+        if (Math.abs(dx) < 0.05 && Math.abs(dy) < 0.05) {
+          dx = player.facing;
+          dy = 0;
+        }
+        const len = Math.hypot(dx, dy) || 1;
+        player.dashTimer = 0.16;
+        player.dashCd = 0.65;
+        player.invuln = Math.max(player.invuln, 0.2);
+        player.vx = (dx / len) * 1000;
+        player.vy = (dy / len) * 1000;
+        spawnBurst(player.x, player.y, 6, "#ffb0d0");
+        dropTrail(player.x, player.y);
+        sfxDash();
+      }
+
+      function trySpecial() {
+        if (!player) return;
+        if (player.special < player.specialMax) return;
+        const encore = player.overloadLock > 0;
+        player.special = 0;
+        specialFlash = 0.55;
+        specialEncore = encore;
+        let dmg = 45 + Math.round(lovePressure() * 25);
+        if (encore) dmg = Math.round(dmg * 1.25);
+        const defeated = [];
+        for (const e of enemies) {
+          e.hp -= dmg;
+          e.stage = loveStage(e);
+          e.stun = Math.max(e.stun, 0.35);
+          spawnBurst(e.x, e.y, 8 + Math.round(lovePressure() * 8), encore ? "#ffe066" : "#ff80c0");
+          addPopup(e.x, e.y - 30, pick(["尊い…", "推しっ！", "うっとり退場！"]));
+          if (e.hp <= 0) defeated.push(e);
+        }
+        for (const e of defeated) registerKill(e);
+        enemies = enemies.filter((e) => e.hp > 0);
+        sfxSpecial();
+        if (encore) {
+          addPopup(player.x, player.y - 70, "アンコール！！");
+          addPopup(player.x, player.y - 100, "推しが応えた！！");
+          shake = Math.max(shake, 0.35);
+        } else {
+          addPopup(player.x, player.y - 70, "愛のヘビープレス！！");
+        }
+      }
+
+      function spawnEnemies(dt) {
+        spawnTimer -= dt;
+        if (spawnTimer > 0) return;
+        const pressure = lovePressure();
+        let interval = Math.max(0.18, 0.95 - wave * 0.05 - pressure * 0.55);
+        if (isUltimate()) interval *= 0.65;
+        spawnTimer = interval;
+        const side = Math.random() < 0.5 ? -1 : 1;
+        const px = clamp(player.x + side * rand(280, 560), 60, WORLD_W - 60);
+        const py = clamp(player.y + rand(-140, 90), 80, GROUND_Y - 40);
+        let count = 1 + Math.floor(pressure * 2.2);
+        if (wave > 2 && Math.random() < 0.35 + pressure * 0.3) count += 1;
+        if (isUltimate()) count += 1;
+        const speedMul = 1 + pressure * 0.35;
+        for (let i = 0; i < count; i++) {
+          const e = createEnemy(px + i * 34, py + rand(-24, 24), 1 + wave * 0.1);
+          e.speed *= speedMul;
+          enemies.push(e);
+        }
+      }
+
+      function updateCrushAura(dt) {
+        if (!player || player.overloadLock <= 0) return;
+        crushTick -= dt;
+        shake = Math.max(shake, 0.08);
+        if (overloadHearts.length < 14 && Math.random() < 0.4) {
+          const a = rand(0, Math.PI * 2);
+          const r = rand(40, 120);
+          overloadHearts.push({
+            x: player.x + Math.cos(a) * r,
+            y: player.y + Math.sin(a) * r,
+            life: rand(0.4, 0.9),
+            maxLife: 0.9,
+            vx: (player.x - (player.x + Math.cos(a) * r)) * 1.2,
+            vy: (player.y - (player.y + Math.sin(a) * r)) * 1.2,
+          });
+        }
+        for (const h of overloadHearts) {
+          h.x += h.vx * dt;
+          h.y += h.vy * dt;
+          h.life -= dt;
+        }
+        overloadHearts = overloadHearts.filter((h) => h.life > 0);
+
+        if (crushTick > 0) return;
+        crushTick = 0.22;
+        const defeated = [];
+        for (const e of enemies) {
+          if (dist(player.x, player.y, e.x, e.y) < CRUSH_RADIUS) {
+            e.hp -= 5;
+            e.stun = Math.max(e.stun, 0.15);
+            e.stage = loveStage(e);
+            player.special = Math.min(player.specialMax, player.special + 2);
+            if (e.hp <= 0) defeated.push(e);
+          }
+        }
+        for (const e of defeated) registerKill(e);
+        enemies = enemies.filter((e) => e.hp > 0);
+      }
+
+      function updatePlayer(dt, gp) {
+        const p = player;
+        p.shootCooldown = Math.max(0, p.shootCooldown - dt);
+        p.dashCd = Math.max(0, p.dashCd - dt);
+        p.dashTimer = Math.max(0, p.dashTimer - dt);
+        p.invuln = Math.max(0, p.invuln - dt);
+        p.hitFlash = Math.max(0, p.hitFlash - dt);
+        p.overloadLock = Math.max(0, p.overloadLock - dt);
+
+        if (p.overloadLock <= 0 && p.overload > 0) {
+          p.overload = Math.max(0, p.overload - 14 * dt);
+        }
+
+        const { mx, my } = getCursorMove(p);
+        const wantShoot = mouseShoot || gp.shoot || touch.shoot || keys.KeyJ;
+        const wantSpecial = mouseSpecialJust || gp.special || touch.special || keysJust.KeyK;
+        const wantDash = mouseDashJust || keysJust.ShiftLeft || keysJust.ShiftRight || gp.dash || touch.dashJust;
+
+        if (p.dashTimer > 0) {
+          // keep dash velocity
+        } else if (p.overloadLock > 0) {
+          p.vx = mx * p.speed * OVERLOAD_MOVE_MUL;
+          p.vy = my * p.speed * OVERLOAD_MOVE_MUL;
+          if (wantSpecial) trySpecial();
+        } else {
+          p.vx = mx * p.speed;
+          p.vy = my * p.speed;
+          if (wantShoot) shootHeart();
+          if (wantSpecial) trySpecial();
+          if (wantDash) tryDash(mx || Math.cos(p.aimAngle), my || Math.sin(p.aimAngle));
+        }
+
+        p.x = clamp(p.x + p.vx * dt, 30, WORLD_W - 30);
+        p.y = clamp(p.y + p.vy * dt, 50, GROUND_Y - 20);
+
+        if (p.overloadLock <= 0 && (Math.abs(p.vx) > 40 || Math.abs(p.vy) > 40)) {
+          if (dist(p.x, p.y, lastTrailX, lastTrailY) >= TRAIL_SPACING) {
+            dropTrail(p.x, p.y);
+          }
+        }
+
+        updateCrushAura(dt);
+        updateGlowsticks(dt);
+      }
+
+      function updateGlowsticks(dt) {
+        if (!player) {
+          glowsticks = glowsticks.filter((g) => {
+            g.life -= dt;
+            return g.life > 0;
+          });
+          return;
+        }
+        const kept = [];
+        for (const g of glowsticks) {
+          g.life -= dt;
+          g.angle += dt * 0.8;
+          if (g.life <= 0) continue;
+          if (dist(player.x, player.y, g.x, g.y) < 36) {
+            player.special = Math.min(player.specialMax, player.special + (player.overloadLock > 0 ? 10 : 6));
+            score += 1;
+            spawnBurst(g.x, g.y, 4, g.hue);
+            addPopup(g.x, g.y - 16, "サイリウム＋");
+          } else {
+            kept.push(g);
+          }
+        }
+        glowsticks = kept;
+      }
+
+      function updateBullets(dt) {
+        for (const b of bullets) {
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+          b.life -= dt;
+        }
+        bullets = bullets.filter((b) => b.life > 0 && b.x > -40 && b.x < WORLD_W + 40);
+      }
+
+      function updateTrails(dt) {
+        for (const t of trails) {
+          t.life -= dt;
+          t.hitCd = Math.max(0, t.hitCd - dt);
+        }
+        trails = trails.filter((t) => t.life > 0);
+
+        for (const t of trails) {
+          if (t.hitCd > 0) continue;
+          for (const e of enemies) {
+            if (e.hp <= 0) continue;
+            if (dist(t.x, t.y, e.x, e.y) < 28) {
+              e.hp -= 4;
+              e.stun = Math.max(e.stun, 0.45);
+              e.stage = loveStage(e);
+              t.hitCd = 0.35;
+              player.special = Math.min(player.specialMax, player.special + 2);
+              spawnBurst(e.x, e.y, 3, "#ff9ad0");
+              if (e.hp <= 0) registerKill(e);
+            }
+          }
+        }
+        enemies = enemies.filter((e) => e.hp > 0);
+      }
+
+      function updateEnemies(dt) {
+        const p = player;
+        const mw = mouseWorld();
+        for (const e of enemies) {
+          e.stun = Math.max(0, e.stun - dt);
+          e.hitCd = Math.max(0, e.hitCd - dt);
+          e.stage = loveStage(e);
+
+          const gdx = mw.x - e.x;
+          const gdy = mw.y - e.y;
+          const gd = Math.hypot(gdx, gdy) || 1;
+          if (gd < GAZE_RADIUS) {
+            const pull = (1 - gd / GAZE_RADIUS) * 55;
+            e.x += (gdx / gd) * pull * dt;
+            e.y += (gdy / gd) * pull * dt;
+            if (gd < 55) e.stun = Math.max(e.stun, 0.08);
+          }
+
+          const dx = p.x - e.x;
+          const dy = p.y - e.y;
+          const d = Math.hypot(dx, dy) || 1;
+
+          if (e.stun <= 0) {
+            const spdMul = p.overloadLock > 0 ? OVERLOAD_ENEMY_MUL : 1;
+            e.vx = (dx / d) * e.speed * spdMul;
+            e.vy = (dy / d) * e.speed * spdMul;
+            e.x += e.vx * dt;
+            e.y += e.vy * dt;
+          } else {
+            e.x += e.vx * dt * 0.15;
+            e.y += e.vy * dt * 0.15;
+          }
+          e.y = clamp(e.y, 50, GROUND_Y - 20);
+
+          if (e.hitCd <= 0 && p.invuln <= 0 && p.dashTimer <= 0 && e.stun <= 0) {
+            const hitDist = (e.w + p.w) * 0.35;
+            if (dist(e.x, e.y, p.x, p.y) < hitDist) {
+              p.hp -= 12;
+              p.hitFlash = 0.2;
+              p.invuln = 0.5;
+              e.hitCd = 0.65;
+              p.x += (dx / d) * -16;
+              sfxHurt();
+              if (p.hp <= 0) {
+                p.hp = 0;
+                spawnBurst(p.x, p.y, 20, "#ff4060");
+              }
+            }
+          }
+        }
+
+        for (const b of bullets) {
+          for (const e of enemies) {
+            if (e.hp <= 0) continue;
+            if (dist(b.x, b.y, e.x, e.y) < e.w * 0.45 + b.r) {
+              e.hp -= b.dmg;
+              e.stage = loveStage(e);
+              b.life = 0;
+              player.special = Math.min(player.specialMax, player.special + 6);
+              spawnBurst(b.x, b.y, 4, "#ff7aad");
+              if (e.hp <= 0) registerKill(e);
+            }
+          }
+        }
+
+        enemies = enemies.filter((e) => e.hp > 0);
+      }
+
+      function updateEchoes(dt) {
+        for (const echo of echoes) {
+          echo.life -= dt;
+          echo.tick -= dt;
+          if (echo.tick > 0) continue;
+          echo.tick = 0.2;
+          for (const e of enemies) {
+            if (e.hp <= 0) continue;
+            if (dist(echo.x, echo.y, e.x, e.y) < echo.r) {
+              e.hp -= 3 + Math.round(lovePressure() * 2);
+              e.stun = Math.max(e.stun, 0.25);
+              e.stage = loveStage(e);
+              player.special = Math.min(player.specialMax, player.special + 1);
+              if (e.hp <= 0) registerKill(e);
+            }
+          }
+        }
+        echoes = echoes.filter((e) => e.life > 0);
+        enemies = enemies.filter((e) => e.hp > 0);
+      }
+
+      function updateHeartbeat(dt) {
+        if (!bgmOn || state !== STATE.PLAYING) {
+          heartbeatPulse = Math.max(0, heartbeatPulse - dt * 3);
+          return;
+        }
+        const pressure = lovePressure();
+        const interval = Math.max(0.28, 0.85 - pressure * 0.45);
+        heartbeatAcc += dt;
+        heartbeatPulse = Math.max(0, heartbeatPulse - dt * 2.5);
+        if (heartbeatAcc >= interval) {
+          heartbeatAcc = 0;
+          heartbeatPulse = 1;
+          sfxHeartbeat();
+          if (pressure > 0.4) {
+            shake = Math.max(shake, 0.04 + pressure * 0.06);
+          }
+        }
+      }
+
+      function updateFx(dt) {
+        specialFlash = Math.max(0, specialFlash - dt);
+        feverTimer = Math.max(0, feverTimer - dt);
+        shake = Math.max(0, shake - dt);
+        if (comboTimer > 0) {
+          comboTimer -= dt;
+          if (comboTimer <= 0) {
+            comboTimer = 0;
+            combo = 0;
+          }
+        }
+        for (const p of particles) {
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vy += 220 * dt;
+          p.life -= dt;
+        }
+        particles = particles.filter((p) => p.life > 0);
+        for (const t of popups) {
+          t.y += t.vy * dt;
+          t.life -= dt;
+        }
+        popups = popups.filter((t) => t.life > 0);
+        for (const m of metsuFx) {
+          m.life -= dt;
+          m.ring += dt * 420;
+        }
+        metsuFx = metsuFx.filter((m) => m.life > 0);
+      }
+
+      function updateCamera() {
+        const target = player.x - W * 0.38;
+        cameraX += (target - cameraX) * 0.14;
+        cameraX = clamp(cameraX, 0, WORLD_W - W);
+      }
+
+      function updateClearing(dt) {
+        clearingTimer -= dt;
+        shake = Math.max(shake, 0.12);
+        if (Math.random() < 0.55) {
+          particles.push({
+            x: cameraX + rand(0, W),
+            y: rand(-30, H * 0.2),
+            vx: rand(-60, 60),
+            vy: rand(100, 260),
+            life: rand(0.8, 1.6),
+            maxLife: 1.6,
+            size: rand(6, 16),
+            color: pick(["#ff4d88", "#ffe066", "#ffffff", "#ff80c0"]),
+            heart: true,
+          });
+        }
+        for (const m of clearMetsuPops) {
+          if (!m.started) {
+            m.delay -= dt;
+            if (m.delay <= 0) {
+              m.started = true;
+              sfxMetsu(3);
+            }
+          } else {
+            m.life -= dt;
+          }
+        }
+        clearMetsuPops = clearMetsuPops.filter((m) => !m.started || m.life > 0);
+        const targetScore = score;
+        clearingScore += (targetScore - clearingScore) * Math.min(1, dt * 4);
+        updateFx(dt);
+        if (clearingTimer <= 0) finishClearToResult();
+      }
+
+      function update(dt) {
+        const gp = readGamepad();
+        const tapped = touch.startTap;
+        touch.startTap = false;
+
+        if (state === STATE.TITLE) {
+          bgmOn = false;
+          if (keysJust.Enter || keysJust.Space || gp.start || gp.shoot || tapped) startGame();
+          return;
+        }
+
+        if (state === STATE.CLEARING) {
+          updateClearing(dt);
+          return;
+        }
+
+        if (state === STATE.RESULT) {
+          bgmOn = false;
+          if (keysJust.Enter || keysJust.KeyR || gp.start || tapped) startGame();
+          if (keysJust.Escape) state = STATE.TITLE;
+          return;
+        }
+
+        timeLeft -= dt;
+        if (player.hp <= 0) {
+          endGame("dead");
+          return;
+        }
+        if (timeLeft <= 0) {
+          timeLeft = 0;
+          endGame("clear");
+          return;
+        }
+
+        updatePlayer(dt, gp);
+        mouseSpecialJust = false;
+        mouseDashJust = false;
+        touch.dashJust = false;
+        updateBullets(dt);
+        updateEnemies(dt);
+        updateTrails(dt);
+        updateEchoes(dt);
+        spawnEnemies(dt);
+        updateFx(dt);
+        updateHeartbeat(dt);
+        updateCamera();
+      }
+
+      function drawHeart(x, y, s, color) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(s, s);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(0, 3);
+        ctx.bezierCurveTo(0, 0, -5, -2, -5, -5);
+        ctx.bezierCurveTo(-5, -8, -1, -8, 0, -5.5);
+        ctx.bezierCurveTo(1, -8, 5, -8, 5, -5);
+        ctx.bezierCurveTo(5, -2, 0, 0, 0, 3);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawBackground() {
+        const g = ctx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, "#3a1840");
+        g.addColorStop(0.55, "#6b2a4a");
+        g.addColorStop(1, "#2a1420");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.save();
+        ctx.translate(-cameraX * 0.35, 0);
+        for (let i = 0; i < 18; i++) {
+          const bx = i * 220;
+          const bh = 120 + (i % 4) * 40;
+          ctx.fillStyle = i % 2 === 0 ? "rgba(80,30,60,0.55)" : "rgba(55,22,48,0.5)";
+          ctx.fillRect(bx, GROUND_Y - bh - 40, 140, bh);
+          ctx.fillStyle = "rgba(255,120,160,0.08)";
+          ctx.fillRect(bx + 20, GROUND_Y - bh + 20, 28, 36);
+          ctx.fillRect(bx + 70, GROUND_Y - bh + 20, 28, 36);
+        }
+        ctx.restore();
+
+        ctx.save();
+        ctx.translate(-cameraX, 0);
+        ctx.fillStyle = "#4a2838";
+        ctx.fillRect(0, GROUND_Y, WORLD_W, H - GROUND_Y);
+        ctx.fillStyle = "rgba(255,120,160,0.25)";
+        ctx.fillRect(0, GROUND_Y, WORLD_W, 4);
+        for (let x = 0; x < WORLD_W; x += 80) {
+          ctx.fillStyle = "rgba(255,180,200,0.12)";
+          ctx.fillRect(x, GROUND_Y + 18, 40, 6);
+        }
+        ctx.restore();
+      }
+
+      function drawPlayer() {
+        const p = player;
+        const sx = p.x - cameraX;
+        const sy = p.y;
+        ctx.save();
+        if (p.invuln > 0 && ((p.invuln * 20) | 0) % 2 === 0) ctx.globalAlpha = 0.45;
+        if (p.overloadLock > 0) ctx.globalAlpha = 0.55;
+
+        ctx.fillStyle = "rgba(255,240,180,0.25)";
+        ctx.beginPath();
+        ctx.ellipse(sx, sy + 18, 34, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = p.hitFlash > 0 ? "#ffffff" : "#ff9ec8";
+        ctx.beginPath();
+        ctx.roundRect(sx - p.w / 2, sy - p.h / 2, p.w, p.h, 12);
+        ctx.fill();
+
+        ctx.fillStyle = "#ffeef6";
+        ctx.fillRect(sx - 10, sy - 2, 20, 8);
+
+        ctx.fillStyle = "#fff5fa";
+        ctx.beginPath();
+        ctx.arc(sx, sy - p.h * 0.28, 12, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#ffd0e8";
+        ctx.beginPath();
+        ctx.ellipse(sx - 10, sy - p.h * 0.38, 6, 8, -0.3, 0, Math.PI * 2);
+        ctx.ellipse(sx + 10, sy - p.h * 0.38, 6, 8, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#3a1a28";
+        ctx.beginPath();
+        ctx.arc(sx - 4, sy - p.h * 0.3, 2.2, 0, Math.PI * 2);
+        ctx.arc(sx + 4, sy - p.h * 0.3, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "#e83a6e";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy - p.h * 0.2, 4, 0.15 * Math.PI, 0.85 * Math.PI);
+        ctx.stroke();
+
+        ctx.strokeStyle = "#ddd";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(sx + p.facing * 8, sy + 4);
+        ctx.lineTo(sx + p.facing * 22, sy - 10);
+        ctx.stroke();
+        ctx.fillStyle = "#222";
+        ctx.beginPath();
+        ctx.arc(sx + p.facing * 22, sy - 10, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        drawHeart(sx - p.facing * 14, sy - 8, 1.1, "#ff3d6e");
+        ctx.fillStyle = "rgba(255,255,200,0.7)";
+        ctx.beginPath();
+        ctx.arc(sx + 14, sy - 28, 2.5, 0, Math.PI * 2);
+        ctx.arc(sx - 16, sy - 18, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      function drawEnemy(e) {
+        const sx = e.x - cameraX;
+        const sy = e.y;
+        const stickColors = ["#66ffcc", "#ff66cc", "#66ccff", "#ffe066"];
+        const stick = stickColors[e.stage] || stickColors[0];
+        const colors = [
+          { body: "#7a8aaa", blush: "transparent", eye: "#222" },
+          { body: "#9a7aaa", blush: "#ff9abb", eye: "#442266" },
+          { body: "#c878b0", blush: "#ff6a9a", eye: "#ff4090" },
+        ];
+        const c = colors[e.stage] || colors[0];
+
+        ctx.save();
+        if (e.stun > 0) ctx.globalAlpha = 0.75;
+        ctx.fillStyle = c.body;
+        ctx.beginPath();
+        ctx.roundRect(sx - e.w / 2, sy - e.h / 2, e.w, e.h, 8);
+        ctx.fill();
+
+        ctx.fillStyle = "#f5e6ef";
+        ctx.beginPath();
+        ctx.arc(sx, sy - 8, 11, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = c.eye;
+        if (e.stage === 2 || e.stun > 0) {
+          ctx.font = "12px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("♥", sx - 4, sy - 5);
+          ctx.fillText("♥", sx + 5, sy - 5);
+        } else {
+          ctx.beginPath();
+          ctx.arc(sx - 4, sy - 10, 2, 0, Math.PI * 2);
+          ctx.arc(sx + 4, sy - 10, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        if (e.stage >= 1 || e.stun > 0) {
+          ctx.fillStyle = c.blush === "transparent" ? "#ff9abb" : c.blush;
+          ctx.beginPath();
+          ctx.ellipse(sx - 8, sy - 4, 4, 2.5, 0, 0, Math.PI * 2);
+          ctx.ellipse(sx + 8, sy - 4, 4, 2.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.strokeStyle = stick;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(sx + 14, sy + 8);
+        ctx.lineTo(sx + 22, sy - 18);
+        ctx.stroke();
+        ctx.fillStyle = stick;
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath();
+        ctx.arc(sx + 22, sy - 18, 6 + e.stage, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        if (e.stun > 0) {
+          ctx.fillStyle = "#ff8ec8";
+          ctx.font = "bold 11px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("尊い…", sx, sy - e.h / 2 - 14);
+        } else if (e.stage === 0) {
+          ctx.strokeStyle = "#333";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(sx, sy - 2, 4, 0.1 * Math.PI, 0.9 * Math.PI);
+          ctx.stroke();
+        } else if (e.stage === 1) {
+          ctx.fillStyle = "#ffb0d0";
+          ctx.font = "10px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("推し？", sx, sy - e.h / 2 - 12);
+        } else {
+          ctx.strokeStyle = "#e83a6e";
+          ctx.beginPath();
+          ctx.arc(sx, sy, 4, 1.1 * Math.PI, 1.9 * Math.PI);
+          ctx.stroke();
+          drawHeart(sx - 16, sy - 22, 0.9, "#ff5a8a");
+        }
+
+        const ratio = clamp(e.hp / e.maxHp, 0, 1);
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.fillRect(sx - 18, sy - e.h / 2 - 10, 36, 4);
+        ctx.fillStyle = "#ff6aa0";
+        ctx.fillRect(sx - 18, sy - e.h / 2 - 10, 36 * ratio, 4);
+        ctx.restore();
+      }
+
+      function drawGlowsticks() {
+        for (const g of glowsticks) {
+          const a = clamp(g.life / g.maxLife, 0, 1);
+          const sx = g.x - cameraX;
+          const sy = g.y;
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(g.angle);
+          ctx.globalAlpha = 0.35 + a * 0.55;
+          ctx.strokeStyle = g.hue;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(0, 10);
+          ctx.lineTo(0, -12);
+          ctx.stroke();
+          ctx.fillStyle = g.hue;
+          ctx.beginPath();
+          ctx.arc(0, -12, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      function drawTrails() {
+        const pressure = lovePressure();
+        for (const t of trails) {
+          const a = clamp(t.life / t.maxLife, 0, 1);
+          ctx.globalAlpha = 0.25 + a * 0.55 + pressure * 0.2;
+          drawHeart(t.x - cameraX, t.y, 1.1 + a * 0.4 + pressure * 0.35, pressure > 0.66 ? "#ff4d9a" : "#ff6a9e");
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      function drawEchoes() {
+        for (const echo of echoes) {
+          const a = clamp(echo.life / echo.maxLife, 0, 1);
+          const sx = echo.x - cameraX;
+          const sy = echo.y;
+          ctx.save();
+          ctx.globalAlpha = a * 0.35;
+          ctx.strokeStyle = "#ff6aad";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(sx, sy, echo.r * (0.7 + (1 - a) * 0.4), 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = a * 0.18;
+          ctx.fillStyle = "#ff80c0";
+          ctx.beginPath();
+          ctx.arc(sx, sy, echo.r * 0.85, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      function drawBullets() {
+        for (const b of bullets) {
+          if (b.glow) {
+            ctx.globalAlpha = 0.35;
+            drawHeart(b.x - cameraX, b.y, b.r / 6, "#ffb0d8");
+            ctx.globalAlpha = 1;
+          }
+          drawHeart(b.x - cameraX, b.y, b.r / 7.5, b.glow ? "#ff2d6e" : "#ff4d7a");
+        }
+      }
+
+      function drawParticles() {
+        for (const p of particles) {
+          const a = clamp(p.life / p.maxLife, 0, 1);
+          ctx.globalAlpha = a;
+          if (p.heart) drawHeart(p.x - cameraX, p.y, p.size / 8, p.color);
+          else {
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x - cameraX, p.y, p.size * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      function drawMetsuFx() {
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for (const m of metsuFx) {
+          const t = 1 - m.life / m.maxLife;
+          const scale = 2.8 - t * 1.6;
+          const alpha = clamp(m.life / m.maxLife, 0, 1);
+          const sx = m.x - cameraX;
+          const sy = m.y;
+
+          ctx.save();
+          ctx.globalAlpha = alpha * 0.55;
+          ctx.strokeStyle = "#ff4d88";
+          ctx.lineWidth = 6 * (1 - t);
+          ctx.beginPath();
+          ctx.arc(sx, sy, m.ring * 0.35 + 20, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.globalAlpha = alpha;
+          ctx.translate(sx, sy);
+          ctx.scale(scale, scale);
+          ctx.font = "bold 72px Trebuchet MS, Yu Gothic, sans-serif";
+          ctx.strokeStyle = "#5a0028";
+          ctx.lineWidth = 8;
+          ctx.strokeText("滅", 0, 0);
+          ctx.fillStyle = t < 0.2 ? "#ffffff" : "#ff3d6e";
+          ctx.fillText("滅", 0, 0);
+          ctx.restore();
+        }
+        ctx.textBaseline = "alphabetic";
+      }
+
+      function drawPopups() {
+        ctx.textAlign = "center";
+        for (const t of popups) {
+          ctx.globalAlpha = clamp(t.life, 0, 1);
+          ctx.font = "bold 18px Trebuchet MS, sans-serif";
+          ctx.fillStyle = "#fff";
+          ctx.strokeStyle = "#c02060";
+          ctx.lineWidth = 3;
+          ctx.strokeText(t.text, t.x - cameraX, t.y);
+          ctx.fillText(t.text, t.x - cameraX, t.y);
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      function drawHud() {
+        const p = player;
+        ctx.fillStyle = "rgba(20,8,16,0.55)";
+        ctx.fillRect(16, 14, 340, 112);
+        ctx.strokeStyle = "rgba(255,150,190,0.35)";
+        ctx.strokeRect(16.5, 14.5, 339, 111);
+
+        ctx.fillStyle = "#ffe8f2";
+        ctx.font = "14px Trebuchet MS, sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText("HP", 28, 36);
+        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        ctx.fillRect(58, 24, 180, 12);
+        ctx.fillStyle = "#ff4d6d";
+        ctx.fillRect(58, 24, 180 * (p.hp / p.maxHp), 12);
+
+        ctx.fillStyle = "#ffe8f2";
+        ctx.fillText("暴走", 28, 60);
+        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        ctx.fillRect(58, 48, 180, 12);
+        ctx.fillStyle = p.overloadLock > 0 ? "#ff3030" : "#ff9a3c";
+        ctx.fillRect(58, 48, 180 * (p.overload / p.overloadMax), 12);
+
+        ctx.fillStyle = "#ffe8f2";
+        ctx.fillText("SP", 28, 84);
+        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        ctx.fillRect(58, 72, 180, 12);
+        ctx.fillStyle = "#c44dff";
+        ctx.fillRect(58, 72, 180 * (p.special / p.specialMax), 12);
+
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#fff0f6";
+        ctx.font = "bold 22px Trebuchet MS, sans-serif";
+        ctx.fillText("スコア " + score, W - 28, 40);
+        ctx.font = "16px Trebuchet MS, sans-serif";
+        ctx.fillText("残り " + Math.ceil(timeLeft) + "秒", W - 28, 64);
+        ctx.fillText("WAVE " + wave, W - 28, 88);
+
+        const pressure = lovePressure();
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#ffe8f2";
+        ctx.font = "13px Trebuchet MS, sans-serif";
+        ctx.fillText("愛圧", 28, 118);
+        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        ctx.fillRect(58, 106, 180, 10);
+        const loveGrad = ctx.createLinearGradient(58, 0, 238, 0);
+        loveGrad.addColorStop(0, "#ff9ad0");
+        loveGrad.addColorStop(1, "#ff2d6e");
+        ctx.fillStyle = loveGrad;
+        ctx.fillRect(58, 106, 180 * pressure, 10);
+
+        if (combo >= 2) {
+          ctx.textAlign = "center";
+          const pulse = 1 + Math.sin(performance.now() * 0.02) * 0.06;
+          ctx.save();
+          ctx.translate(W / 2, 150);
+          ctx.scale(pulse, pulse);
+          ctx.font = "bold 42px Trebuchet MS, sans-serif";
+          ctx.strokeStyle = "#5a0028";
+          ctx.lineWidth = 6;
+          ctx.strokeText("滅×" + combo, 0, 0);
+          ctx.fillStyle = "#ff4d88";
+          ctx.fillText("滅×" + combo, 0, 0);
+          ctx.restore();
+        }
+
+        if (feverTimer > 0) {
+          ctx.textAlign = "center";
+          ctx.fillStyle = "rgba(255,120,200,0.95)";
+          ctx.font = "bold 22px Trebuchet MS, sans-serif";
+          ctx.fillText("滅フィーバー！ 連射強化中", W / 2, 190);
+        }
+
+        if (isUltimate()) {
+          ctx.textAlign = "center";
+          const pulse = 0.75 + Math.sin(performance.now() * 0.02) * 0.25;
+          ctx.globalAlpha = pulse;
+          ctx.fillStyle = "#ffe066";
+          ctx.font = "bold 28px Trebuchet MS, sans-serif";
+          ctx.fillText("究極の愛！！ スコア×2・攻撃全開", W / 2, H - 36);
+          ctx.globalAlpha = 1;
+        } else if (pressure >= 0.66) {
+          ctx.textAlign = "center";
+          ctx.fillStyle = "rgba(255,160,200,0.9)";
+          ctx.font = "bold 20px Trebuchet MS, sans-serif";
+          ctx.fillText("愛があふれ出している…扇状ハート！", W / 2, H - 36);
+        } else if (pressure >= 0.33) {
+          ctx.textAlign = "center";
+          ctx.fillStyle = "rgba(255,180,210,0.85)";
+          ctx.font = "bold 18px Trebuchet MS, sans-serif";
+          ctx.fillText("愛圧上昇中 — ハートが二重に！", W / 2, H - 36);
+        }
+
+        if (p.overloadLock > 0) {
+          ctx.textAlign = "center";
+          ctx.fillStyle = "rgba(255,80,140,0.95)";
+          ctx.font = "bold 20px Trebuchet MS, sans-serif";
+          ctx.fillText("ファンの愛に押し潰されている…アンコールで返せ！", W / 2, 128);
+          ctx.font = "14px Trebuchet MS, sans-serif";
+          ctx.fillStyle = "rgba(255,200,220,0.9)";
+          ctx.fillText("あふれた愛が周囲のファンを圧殺中（必殺OK）", W / 2, 152);
+        }
+      }
+
+      function drawFeverVignette() {
+        const pressure = state === STATE.PLAYING ? lovePressure() : 0;
+        const feverA = feverTimer > 0 ? Math.min(1, feverTimer / 2.5) * 0.3 : 0;
+        const pressureA = pressure * 0.28 + (isUltimate() ? 0.18 : 0);
+        const a = Math.max(feverA, pressureA);
+        if (a <= 0) return;
+        const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.15, W / 2, H / 2, H * 0.78);
+        g.addColorStop(0, "rgba(255,80,160,0)");
+        g.addColorStop(1, "rgba(255,40,120," + a + ")");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+        if (heartbeatPulse > 0.2) {
+          ctx.fillStyle = "rgba(255,120,180," + (heartbeatPulse * 0.08) + ")";
+          ctx.fillRect(0, 0, W, H);
+        }
+      }
+
+      function drawSpecialFlash() {
+        if (specialFlash <= 0) return;
+        const a = specialFlash / 0.55;
+        const encore = specialEncore;
+        ctx.fillStyle = encore
+          ? "rgba(255,220,100," + (0.4 * a) + ")"
+          : "rgba(255,80,160," + (0.35 * a) + ")";
+        ctx.fillRect(0, 0, W, H);
+        ctx.textAlign = "center";
+        ctx.fillStyle = "rgba(255,255,255," + a + ")";
+        ctx.font = "bold 48px Trebuchet MS, sans-serif";
+        ctx.fillText(encore ? "アンコール！！" : "愛のヘビープレス！", W / 2, H * 0.42);
+        ctx.font = "22px Trebuchet MS, sans-serif";
+        ctx.fillText(encore ? "推しが応えた！！" : "最高にヘビー！！", W / 2, H * 0.5);
+      }
+
+      function drawTitle() {
+        drawBackground();
+        ctx.fillStyle = "rgba(10,4,12,0.45)";
+        ctx.fillRect(0, 0, W, H);
+
+        for (let i = 0; i < 12; i++) {
+          const x = (i * 137 + (performance.now() * 0.02)) % (W + 40) - 20;
+          const y = 80 + (i * 53) % (H - 160);
+          drawHeart(x, y, 1.2 + (i % 3) * 0.3, "rgba(255,100,150,0.35)");
+        }
+
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#ffd0e4";
+        ctx.font = "18px Trebuchet MS, sans-serif";
+        ctx.fillText("KOTATSU SOFT", W / 2, H * 0.2);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 54px Trebuchet MS, sans-serif";
+        ctx.fillText("重愛パニック！", W / 2, H * 0.32);
+        ctx.font = "28px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#ff9ec0";
+        ctx.fillText("～うっとり消滅デイズ～", W / 2, H * 0.4);
+
+        ctx.fillStyle = "#ffe8f2";
+        ctx.font = "18px Trebuchet MS, sans-serif";
+        ctx.fillText("30秒ライブ！ファンの推し愛を「滅」まで受け止めろ", W / 2, H * 0.5);
+        ctx.font = "16px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#ffc0d8";
+        ctx.fillText("マウスで移動・左クリック攻撃・右クリック必殺・中クリック／Shift回避", W / 2, H * 0.56);
+
+        const pulse = 0.7 + Math.sin(performance.now() * 0.005) * 0.3;
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 26px Trebuchet MS, sans-serif";
+        ctx.fillText("Enter / Space / タップ でスタート", W / 2, H * 0.68);
+        ctx.globalAlpha = 1;
+
+        bestScore = loadBestScore();
+        ctx.fillStyle = "#ffb0cc";
+        ctx.font = "16px Trebuchet MS, sans-serif";
+        ctx.fillText("ハイスコア: " + bestScore, W / 2, H * 0.76);
+      }
+
+      function drawResult() {
+        drawBackground();
+        if (player) {
+          drawTrails();
+          drawEchoes();
+          drawPlayer();
+          for (const e of enemies) drawEnemy(e);
+          drawParticles();
+          drawMetsuFx();
+          drawPopups();
+        }
+        ctx.fillStyle = cleared ? "rgba(40,8,28,0.55)" : "rgba(12,4,10,0.62)";
+        ctx.fillRect(0, 0, W, H);
+
+        if (cleared) {
+          for (let i = 0; i < 10; i++) {
+            const x = (i * 140 + performance.now() * 0.05) % (W + 40) - 20;
+            drawHeart(x, 80 + (i % 5) * 30, 1.5, "rgba(255,120,180,0.45)");
+          }
+          ctx.textAlign = "center";
+          ctx.font = "bold 96px Trebuchet MS, Yu Gothic, sans-serif";
+          ctx.strokeStyle = "#5a0028";
+          ctx.lineWidth = 10;
+          ctx.strokeText("滅", W / 2, H * 0.2);
+          ctx.fillStyle = "#ff3d6e";
+          ctx.fillText("滅", W / 2, H * 0.2);
+
+          ctx.fillStyle = "#ffe066";
+          ctx.font = "bold 42px Trebuchet MS, sans-serif";
+          ctx.fillText("好きすぎて耐えた！クリア", W / 2, H * 0.34);
+          ctx.fillStyle = "#ffc0d8";
+          ctx.font = "18px Trebuchet MS, sans-serif";
+          ctx.fillText("アンコール成功 —— ファンの愛を生き抜いたアイドル", W / 2, H * 0.4);
+        } else {
+          ctx.textAlign = "center";
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "bold 48px Trebuchet MS, sans-serif";
+          ctx.fillText("ファンの愛に負けた…", W / 2, H * 0.28);
+        }
+
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#ff9ec0";
+        ctx.font = "24px Trebuchet MS, sans-serif";
+        ctx.fillText("スコア", W / 2, H * 0.48);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 64px Trebuchet MS, sans-serif";
+        ctx.fillText(String(score), W / 2, H * 0.58);
+
+        ctx.font = "18px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#ffc0d8";
+        ctx.fillText(
+          "最大滅コンボ: ×" + maxCombo + (clearBonus > 0 ? " ／ 生還ボーナス +" + clearBonus : ""),
+          W / 2,
+          H * 0.66
+        );
+
+        ctx.fillStyle = isNewRecord ? "#ffe066" : "#ffc0d8";
+        ctx.fillText(
+          (isNewRecord ? "NEW RECORD! " : "") + "ハイスコア: " + bestScore,
+          W / 2,
+          H * 0.72
+        );
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "22px Trebuchet MS, sans-serif";
+        ctx.fillText("Enter / R / タップ でリトライ", W / 2, H * 0.8);
+        ctx.font = "16px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#ffb0cc";
+        ctx.fillText("Esc でタイトルへ", W / 2, H * 0.86);
+      }
+
+      function drawOverloadCrush() {
+        if (!player || player.overloadLock <= 0) return;
+        const sx = player.x - cameraX;
+        const sy = player.y;
+        ctx.save();
+        ctx.globalAlpha = 0.22;
+        ctx.strokeStyle = "#ff4d88";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(sx, sy, CRUSH_RADIUS, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.12;
+        ctx.fillStyle = "#ff80c0";
+        ctx.beginPath();
+        ctx.arc(sx, sy, CRUSH_RADIUS * 0.9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        for (const h of overloadHearts) {
+          ctx.globalAlpha = clamp(h.life / h.maxLife, 0, 1) * 0.8;
+          drawHeart(h.x - cameraX, h.y, 1.2, "#ff6aad");
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      function drawGazeBeam() {
+        if (!player) return;
+        const sx = player.x - cameraX;
+        const sy = player.y;
+        const ex = mouseSX;
+        const ey = mouseSY;
+        const pressure = lovePressure();
+        const a = 0.2 + pressure * 0.45;
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,120,180," + a + ")";
+        ctx.lineWidth = 2 + pressure * 5;
+        ctx.setLineDash([10, 8]);
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const steps = 4 + ((pressure * 4) | 0);
+        for (let i = 1; i <= steps; i++) {
+          const t = i / (steps + 1);
+          drawHeart(sx + (ex - sx) * t, sy + (ey - sy) * t, 0.7 + pressure * 0.5, "rgba(255,90,150," + (0.35 + pressure * 0.4) + ")");
+        }
+        ctx.globalAlpha = 0.5 + pressure * 0.4;
+        ctx.beginPath();
+        ctx.arc(ex, ey, 10 + pressure * 8, 0, Math.PI * 2);
+        ctx.strokeStyle = "#ff6aad";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawClearing() {
+        const t = 1 - clamp(clearingTimer / CLEARING_DUR, 0, 1);
+        drawBackground();
+        if (player) {
+          drawTrails();
+          drawPlayer();
+          drawParticles();
+          drawMetsuFx();
+          drawPopups();
+        }
+
+        const zoom = 1 + t * 0.18;
+        ctx.save();
+        ctx.translate(W / 2, H / 2);
+        ctx.scale(zoom, zoom);
+        ctx.translate(-W / 2, -H / 2);
+
+        const flash = t < 0.18 ? (1 - t / 0.18) : Math.max(0, 0.25 - t * 0.2);
+        if (flash > 0) {
+          ctx.fillStyle = "rgba(255,255,255," + flash + ")";
+          ctx.fillRect(-40, -40, W + 80, H + 80);
+          ctx.fillStyle = "rgba(255,80,160," + (flash * 0.55) + ")";
+          ctx.fillRect(-40, -40, W + 80, H + 80);
+        }
+
+        for (const m of clearMetsuPops) {
+          if (!m.started) continue;
+          const a = clamp(m.life / m.maxLife, 0, 1);
+          const scale = (2.2 - a * 0.8) * m.size;
+          ctx.save();
+          ctx.globalAlpha = a;
+          ctx.translate(m.x, m.y);
+          ctx.scale(scale, scale);
+          ctx.font = "bold 72px Trebuchet MS, Yu Gothic, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.strokeStyle = "#5a0028";
+          ctx.lineWidth = 8;
+          ctx.strokeText("滅", 0, 0);
+          ctx.fillStyle = "#ff3d6e";
+          ctx.fillText("滅", 0, 0);
+          ctx.restore();
+        }
+        ctx.restore();
+
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#ffe066";
+        ctx.font = "bold 52px Trebuchet MS, sans-serif";
+        ctx.globalAlpha = clamp(t * 2, 0, 1);
+        ctx.fillText("好きすぎて滅 / アンコール成功", W / 2, H * 0.62);
+        ctx.font = "22px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#ffc0d8";
+        ctx.fillText("ファンの愛を生き抜き、アイドルが応えた", W / 2, H * 0.7);
+        ctx.font = "bold 40px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(String(Math.round(clearingScore)), W / 2, H * 0.8);
+        ctx.globalAlpha = 1;
+      }
+
+      function drawTouchPad() {
+        if (state !== STATE.PLAYING) return;
+        ctx.save();
+        function btn(x, y, label, on) {
+          ctx.globalAlpha = on ? 0.75 : 0.4;
+          ctx.fillStyle = on ? "#ff5a9a" : "#4a2038";
+          ctx.beginPath();
+          ctx.arc(x, y, PAD.btnR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#ffc0d8";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.globalAlpha = 0.95;
+          ctx.fillStyle = "#fff";
+          ctx.font = "bold 16px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(label, x, y);
+        }
+        btn(PAD.shootX, PAD.shootY, "攻撃", touch.shoot || mouseShoot);
+        btn(PAD.specialX, PAD.specialY, "SP", touch.special);
+        btn(PAD.dashX, PAD.dashY, "回避", touch.dash);
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = "#ffc0d8";
+        ctx.font = "12px Trebuchet MS, sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText("タップ位置へ移動", 24, H - 24);
+        ctx.restore();
+        ctx.textBaseline = "alphabetic";
+      }
+
+      function drawPlaying() {
+        ctx.save();
+        const hb = heartbeatPulse * (2 + lovePressure() * 4);
+        const overloadShake = player && player.overloadLock > 0 ? 3 : 0;
+        const mag = (shake > 0 ? shake * 14 : 0) + hb + overloadShake;
+        if (mag > 0) {
+          ctx.translate(rand(-mag, mag), rand(-mag, mag));
+        }
+        drawBackground();
+        drawGazeBeam();
+        drawEchoes();
+        drawTrails();
+        drawGlowsticks();
+        for (const e of enemies) drawEnemy(e);
+        drawBullets();
+        drawOverloadCrush();
+        drawPlayer();
+        drawParticles();
+        drawMetsuFx();
+        drawPopups();
+        ctx.restore();
+        drawFeverVignette();
+        drawHud();
+        drawSpecialFlash();
+        drawTouchPad();
+      }
+
+      function draw() {
+        if (state === STATE.TITLE) drawTitle();
+        else if (state === STATE.CLEARING) drawClearing();
+        else if (state === STATE.RESULT) drawResult();
+        else drawPlaying();
+      }
+
+      function tick(now) {
+        const dt = Math.min(0.033, (now - lastTime) / 1000 || 0.016);
+        lastTime = now;
+        update(dt);
+        draw();
+        for (const k of Object.keys(keysJust)) delete keysJust[k];
+        requestAnimationFrame(tick);
+      }
+
+      window.addEventListener("keydown", (e) => {
+        if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
+          e.preventDefault();
+        }
+        if (!keys[e.code]) keysJust[e.code] = true;
+        keys[e.code] = true;
+        ensureAudio();
+      });
+
+      window.addEventListener("keyup", (e) => {
+        keys[e.code] = false;
+      });
+
+      window.addEventListener("blur", () => {
+        for (const k of Object.keys(keys)) keys[k] = false;
+        mouseShoot = false;
+        resetTouch();
+      });
+
+      function canvasPoint(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+          x: ((clientX - rect.left) / rect.width) * W,
+          y: ((clientY - rect.top) / rect.height) * H,
+        };
+      }
+
+      function hitCircle(px, py, cx, cy, r) {
+        return dist(px, py, cx, cy) <= r;
+      }
+
+      function resetTouch() {
+        touch.shoot = false;
+        touch.special = false;
+        touch.dash = false;
+        touch.aimId = null;
+        touch.btnIds = Object.create(null);
+      }
+
+      function hitAnyPad(px, py) {
+        return (
+          hitCircle(px, py, PAD.shootX, PAD.shootY, PAD.btnR * 1.25) ||
+          hitCircle(px, py, PAD.specialX, PAD.specialY, PAD.btnR * 1.25) ||
+          hitCircle(px, py, PAD.dashX, PAD.dashY, PAD.btnR * 1.25)
+        );
+      }
+
+      function onPointerDown(e) {
+        ensureAudio();
+        e.preventDefault();
+        const pt = canvasPoint(e.clientX, e.clientY);
+
+        if (state === STATE.TITLE || state === STATE.RESULT) {
+          touch.startTap = true;
+          return;
+        }
+        if (state === STATE.CLEARING) return;
+
+        if (e.pointerType === "mouse") {
+          mouseSX = pt.x;
+          mouseSY = pt.y;
+          if (e.button === 0) mouseShoot = true;
+          if (e.button === 2) mouseSpecialJust = true;
+          if (e.button === 1) mouseDashJust = true;
+          return;
+        }
+
+        if (hitCircle(pt.x, pt.y, PAD.shootX, PAD.shootY, PAD.btnR * 1.25)) {
+          touch.btnIds[e.pointerId] = "shoot";
+          touch.shoot = true;
+          return;
+        }
+        if (hitCircle(pt.x, pt.y, PAD.specialX, PAD.specialY, PAD.btnR * 1.25)) {
+          touch.btnIds[e.pointerId] = "special";
+          touch.special = true;
+          mouseSpecialJust = true;
+          return;
+        }
+        if (hitCircle(pt.x, pt.y, PAD.dashX, PAD.dashY, PAD.btnR * 1.25)) {
+          touch.btnIds[e.pointerId] = "dash";
+          touch.dash = true;
+          touch.dashJust = true;
+          return;
+        }
+        touch.aimId = e.pointerId;
+        mouseSX = pt.x;
+        mouseSY = pt.y;
+      }
+
+      function onPointerMove(e) {
+        if (state !== STATE.PLAYING) return;
+        const pt = canvasPoint(e.clientX, e.clientY);
+        if (e.pointerType === "mouse") {
+          mouseSX = pt.x;
+          mouseSY = pt.y;
+          return;
+        }
+        if (touch.aimId === e.pointerId) {
+          e.preventDefault();
+          mouseSX = pt.x;
+          mouseSY = pt.y;
+        }
+      }
+
+      function onPointerUp(e) {
+        if (e.pointerType === "mouse") {
+          if (e.button === 0) mouseShoot = false;
+          return;
+        }
+        if (touch.aimId === e.pointerId) touch.aimId = null;
+        const btn = touch.btnIds[e.pointerId];
+        if (btn) {
+          delete touch.btnIds[e.pointerId];
+          let still = false;
+          for (const id of Object.keys(touch.btnIds)) {
+            if (touch.btnIds[id] === btn) still = true;
+          }
+          if (!still) {
+            if (btn === "shoot") touch.shoot = false;
+            if (btn === "special") touch.special = false;
+            if (btn === "dash") touch.dash = false;
+          }
+        }
+      }
+
+      canvas.style.touchAction = "none";
+      canvas.addEventListener("pointerdown", onPointerDown, { passive: false });
+      canvas.addEventListener("pointermove", onPointerMove, { passive: false });
+      canvas.addEventListener("pointerup", onPointerUp, { passive: false });
+      canvas.addEventListener("pointercancel", onPointerUp, { passive: false });
+      canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+      canvas.addEventListener("auxclick", (e) => {
+        if (e.button === 1) e.preventDefault();
+      });
+
+      if (!CanvasRenderingContext2D.prototype.roundRect) {
+        CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+          const radius = typeof r === "number" ? r : 8;
+          this.moveTo(x + radius, y);
+          this.arcTo(x + w, y, x + w, y + h, radius);
+          this.arcTo(x + w, y + h, x, y + h, radius);
+          this.arcTo(x, y + h, x, y, radius);
+          this.arcTo(x, y, x + w, y, radius);
+          this.closePath();
+          return this;
+        };
+      }
+
+      bestScore = loadBestScore();
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>

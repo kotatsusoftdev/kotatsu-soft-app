@@ -4,7 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>コタツ・ソフト | Browser Games</title>
-  <link rel="icon" href="./assets/channel-icon.png" type="image/png" />
+  <link rel="icon" href="./assets/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="icon" href="./assets/favicon-48.png" type="image/png" sizes="48x48" />
+  <link rel="apple-touch-icon" href="./assets/favicon-180.png" sizes="180x180" />
   <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet" />
   <style>
     :root {
@@ -374,6 +376,30 @@
       transform: scale(1.05);
     }
 
+    .thumb.heavy_love_snake {
+      color: transparent;
+      text-shadow: none;
+      font-size: 0;
+      background-color: #e83a6e;
+    }
+
+    .thumb.heavy_love_snake::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: url("./assets/002_heavy_love_snake.png");
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      transition: transform 280ms ease;
+      will-change: transform;
+    }
+
+    .game-card:hover .thumb.heavy_love_snake::before,
+    .game-card:focus-within .thumb.heavy_love_snake::before {
+      transform: scale(1.05);
+    }
+
     .game-card h3 {
       margin: 0;
       font-family: "DotGothic16", sans-serif;
@@ -642,25 +668,44 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: fit-content;
+      gap: 8px;
+      width: 100%;
+      margin-top: 4px;
       text-decoration: none;
-      color: #7b2f12;
-      background: linear-gradient(180deg, #fff8ef, #ffe4c0);
-      border: 1px solid rgba(123, 47, 18, 0.22);
-      border-radius: 999px;
-      padding: 10px 16px;
-      font-size: 0.88rem;
+      color: #fff9f0;
+      background: linear-gradient(90deg, #bf2f2f, #cf5632);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 12px;
+      padding: 14px 20px;
+      font-size: 1rem;
       font-weight: 800;
-      letter-spacing: 0.03em;
-      box-shadow: 0 6px 14px rgba(88, 53, 21, 0.1);
-      transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+      letter-spacing: 0.04em;
+      box-shadow:
+        0 4px 0 #8f2323,
+        0 10px 24px rgba(191, 47, 47, 0.3);
+      transition: transform 120ms ease, box-shadow 120ms ease, filter 160ms ease;
+    }
+
+    .staff-link::after {
+      content: "→";
+      font-size: 1.05rem;
+      line-height: 1;
     }
 
     .staff-link:hover,
     .staff-link:focus-visible {
-      transform: translateY(-1px);
-      filter: brightness(1.03);
-      box-shadow: 0 10px 20px rgba(88, 53, 21, 0.14);
+      transform: translateY(2px);
+      filter: brightness(1.05);
+      box-shadow:
+        0 2px 0 #8f2323,
+        0 6px 16px rgba(191, 47, 47, 0.26);
+    }
+
+    .staff-link:active {
+      transform: translateY(3px);
+      box-shadow:
+        0 1px 0 #8f2323,
+        0 3px 10px rgba(191, 47, 47, 0.2);
     }
 
     footer {
@@ -822,9 +867,34 @@
             <div class="card-actions-group">
               <a class="action-btn play" data-game-id="matatabi_chaos" href="./001_matatabi_chaos/src/index.html">今すぐ遊ぶ (Play)</a>
               <div class="sub-actions">
-                <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">🎬 開発動画</a>
+                <a class="action-btn youtube-link" href="https://youtu.be/uJo-_q4DCVk" target="_blank" rel="noopener noreferrer">🎬 開発動画</a>
                 <a class="action-btn spec-link" data-game-id="matatabi_chaos" href="./shared/spec.html?file=spec_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.md" target="_blank" rel="noopener noreferrer">📄 AI仕様書</a>
                 <a class="action-btn meeting-link" data-game-id="matatabi_chaos" href="./shared/meeting.html?file=meeting_テトリスと猫を掛け合わせたゲームを作って_20260725_124622.jsonl" target="_blank" rel="noopener noreferrer">💬 会議ログ</a>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="game-card fade-up">
+          <a
+            class="game-card-link"
+            href="./002_heavy_love_snake/src/index.html"
+            data-game-id="heavy_love_snake"
+          >重愛パニックを遊ぶ</a>
+          <div class="thumb heavy_love_snake" aria-hidden="true"></div>
+          <h3>重愛パニック！ ～うっとり消滅デイズ～</h3>
+          <p>重すぎる愛の波動で敵をうっとり消滅！ハート弾とヘビープレスでスコアを稼げ。叫びすぎ注意の暴走ゲージ付き。</p>
+          <div class="card-footer">
+            <div class="actions">
+              <span class="pill">Heavy Love Action</span>
+              <span class="pill play-count play-count-heavy_love_snake" data-stat-id="heavy_love_snake" aria-live="polite">🎮 -回プレイ</span>
+            </div>
+            <div class="card-actions-group">
+              <a class="action-btn play" data-game-id="heavy_love_snake" href="./002_heavy_love_snake/src/index.html">今すぐ遊ぶ (Play)</a>
+              <div class="sub-actions">
+                <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">🎬 開発動画</a>
+                <a class="action-btn spec-link" data-game-id="heavy_love_snake" href="./shared/spec.html?file=spec_マリオっぽい2Dスクロールゲームと_好きすぎて滅_を掛け合わせたゲーム_20260730_205037.md" target="_blank" rel="noopener noreferrer">📄 AI仕様書</a>
+                <a class="action-btn meeting-link" data-game-id="heavy_love_snake" href="./shared/meeting.html?file=meeting_マリオっぽい2Dスクロールゲームと_好きすぎて滅_を掛け合わせたゲーム_20260730_205037.jsonl" target="_blank" rel="noopener noreferrer">💬 会議ログ</a>
               </div>
             </div>
           </div>
