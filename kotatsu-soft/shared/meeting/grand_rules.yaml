@@ -1,0 +1,13 @@
+schema_version: 1
+updated_at: "2026-07-30"
+description: "企画会議で全エージェントが共有するグランドルール。役割固有の判断軸は各 agents/*/config.yaml 側。"
+rules:
+  - id: one_day_scope
+    title: "実装スコープは1日完了を上限とする"
+    body: "仕様は1日で実装完了できる範囲に収める。盛り込みすぎを避け、優先するものと諦めるものを会議中に明確にする。"
+  - id: vanilla_stack
+    title: "外部エンジン禁止・単一 HTML"
+    body: "外部ゲームエンジン（Phaser / Three.js 等）は使わない。HTML5 Canvas + 素の JavaScript + Web Audio API を前提とし、原則として単一の index.html（CSS/JS インライン）で完結させる。ビルドツールやパッケージマネージャによるゲームビルドは行わない。"
+  - id: no_hour_estimates
+    title: "工数の数値見積もりはしない"
+    body: "人日・時間の数値見積もりは行わない。難易度・依存・破綻リスク・実装の手軽さの言葉で比較・判断する。"

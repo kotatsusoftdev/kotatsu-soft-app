@@ -84,13 +84,27 @@ flowchart LR
 
 | 表示名 | role | 主な視点 |
 |--------|------|----------|
-| すずかちゃん | `pm` | 1日実装の現実性と面白さの検証、最終1案への収束 |
-| スゴ杉くん | `dev` | 技術的実現性、Canvas 等での落とし所 |
-| ヂャイアン | `marketing` | 目立つ・びっくりする企画と見せ方 |
+| すずかちゃん | `pm` | 面白さと実現性の検証、不要要素の削減、最終1案への収束 |
+| スゴ杉くん | `dev` | 技術的実現性、難所の見極め、面白さが伝わる実装の落とし所 |
+| ヂャイアン | `marketing` | 初見インパクト・拡散のフック、制約を武器にした見せ方 |
 
-設定の詳細は `ai-core/src/agents/*/config.yaml`。
+設定の詳細は `ai-core/src/agents/*/config.yaml`。共有のスコープ・技術制約は §4.2 のグランドルールが正本。
 
-### 4.2 開始条件
+### 4.2 グランドルール
+
+企画会議で全 AI 社員が共有する制約の正本は次のファイル。
+
+- パス: `shared/meeting/grand_rules.yaml`
+- 注入: `ai-core` が各エージェントの system instruction に `【企画会議グランドルール】` として自動挿入する
+- 責務分界: スコープ上限・技術スタック・工数の扱いなどの**共有制約**は本 YAML。役割固有の判断軸・口調は各 `config.yaml`
+
+改定手順:
+
+1. `shared/meeting/grand_rules.yaml` を更新する（`updated_at` も更新）
+2. 必要なら本設計書の関連節・改定履歴を追記する
+3. Bot を再起動して反映する
+
+### 4.3 開始条件
 
 1. Discord の社長命令チャンネル（`PRESIDENT_ORDER_CHANNEL_ID`）に何かメッセージを投稿する
 2. Bot が「企画会議 / 反省会」のプロセス選択を返す
@@ -107,7 +121,7 @@ flowchart LR
 
 環境変数の置き方は [README.md](./README.md) を参照。
 
-### 4.3 ターン位相
+### 4.4 ターン位相
 
 最大おおよそ 10 ターン。ターン番号に応じて位相が切り替わる（実装: `ai-core/src/orchestrator.py` / 表示名: `ai-core/src/phase_labels.py`）。
 
@@ -119,7 +133,7 @@ flowchart LR
 
 PM が `FINISH_FOR_PRESIDENT` を選ぶと社長判定へ進む。早期終了のガードやターン上限時の強制提出はオーケストレータが制御する。
 
-### 4.4 成果物
+### 4.5 成果物
 
 会議ログは `artifact_stem` 付きで保存される。
 
@@ -172,7 +186,7 @@ Go 直後のメッセージ例（運用上の目印）: 仕様書の自動出力
 - HTML5 Canvas + 素の JavaScript + Web Audio API
 - 原則として **単一の `index.html`**（CSS / JS はインライン）
 - ビルドツールやパッケージマネージャによるゲームビルドは行わない
-- スコープは **1日実装可能** を目安にする（PM / Dev の評価基準と整合）
+- スコープ・技術スタックの上限は `shared/meeting/grand_rules.yaml` に従う
 
 ### 7.2 ディレクトリ配置
 
@@ -353,13 +367,15 @@ CLI・Discord からの起動手順は [README.md](./README.md) の「開発完�
 
 1. **プロセス変更時は本ファイルを先に更新する。** README はセットアップ・短い手順・本設計書へのリンクに留める。
 2. **個別仕様・レビューは `shared/` に置く。** 本ファイルへは一般化した規約・フェーズだけ反映する。
-3. **用語はコードと揃える。** `artifact_stem` / `game_id` / `DIVERGENCE`・`CONFLICT`・`FINAL` / Go・NoGo / `FINISH_FOR_PRESIDENT` など。
-4. **改定したら下表に追記する。**
+3. **企画会議の共有制約は `shared/meeting/grand_rules.yaml` を正本とする。** 役割固有の評価軸は `ai-core/src/agents/*/config.yaml`。
+4. **用語はコードと揃える。** `artifact_stem` / `game_id` / `DIVERGENCE`・`CONFLICT`・`FINAL` / Go・NoGo / `FINISH_FOR_PRESIDENT` など。
+5. **改定したら下表に追記する。**
 
 ### 改定履歴
 
 | 日付 | 要約 |
 |------|------|
+| 2026-07-30 | 企画会議グランドルールを `shared/meeting/grand_rules.yaml` に正本化。PM/Dev/Marketing config から共有制約を分離 |
 | 2026-07-30 | 仕様作成時の game_id 自動採番。stats.js 一本化。ID 一致規約を明文化 |
 | 2026-07-30 | チャンネル役割分離。社長命令は選択のみ、経過・結果は企画検討／反省会チャンネルへ |
 | 2026-07-30 | 社長命令チャンネルへ入口を統一。プロセス選択（企画会議／反省会）とテーマ Modal を追加。旧称「無茶ぶり」を廃止 |

@@ -4,6 +4,7 @@ import yaml
 from abc import ABC, abstractmethod
 from typing import Any
 
+from grand_rules_store import build_grand_rules_instruction
 from lessons_store import build_lessons_instruction, coerce_lesson_items, load_lessons
 
 
@@ -15,6 +16,8 @@ class BaseAgent(ABC):
         self.config_path = str(config_path)
         self.agent_dir = Path(config_path).resolve().parent
         self.agents_root = self.agent_dir.parent
+        # ai-core/src/agents/<role> -> kotatsu-soft/
+        self.repo_root = self.agents_root.parents[2]
 
         with open(config_path, "r", encoding="utf-8") as f:
             self.config = yaml.safe_load(f)
@@ -103,10 +106,22 @@ class BaseAgent(ABC):
             raise ValueError("output_format is missing in agent config")
 
         rules = "\n- ".join(criteria["decision_rules"])
+        persona = agent_config.get("persona") or {}
+        tone = str(persona.get("tone") or "").strip()
+        mindset = str(persona.get("mindset") or "").strip()
+        persona_block = ""
+        if tone or mindset:
+            persona_lines = ["【口調・スタンス】"]
+            if tone:
+                persona_lines.append(f"- 口調: {tone}")
+            if mindset:
+                persona_lines.append(f"- スタンス: {mindset}")
+            persona_block = "\n".join(persona_lines) + "\n\n"
+
         instruction = (
             f"あなたはシステム内の自律型エージェント「{self.name}（{self.title}）」です。\n"
-            "論理的かつ客観的な判断を優先しつつ、やや会話調で読みやすい表現を使ってください。\n"
-            "工数見積もりは行わず、実装の手軽さと実現性に集中してください。\n\n"
+            "やや会話調で読みやすい表現を使ってください。\n\n"
+            f"{persona_block}"
             "毎ターン同じ言い回しや同じ見出しテンプレートを機械的に繰り返さず、"
             "文脈に合わせて自然な言葉で説明してください。\n\n"
             "各回答は 500文字前後（目安 400〜600文字）に収め、冗長な前置きは避けてください。\n\n"
@@ -118,10 +133,16 @@ class BaseAgent(ABC):
             "【出力形式】\n"
             f"- {output_format}\n"
         )
+        grand_rules_block = self.build_grand_rules_instruction()
+        if grand_rules_block:
+            instruction = f"{instruction}\n{grand_rules_block}"
         lessons_block = self.build_lessons_instruction()
         if lessons_block:
             instruction = f"{instruction}\n{lessons_block}"
         return instruction
+
+    def build_grand_rules_instruction(self) -> str:
+        return build_grand_rules_instruction(self.repo_root)
 
     def load_own_lessons(self) -> list[str]:
         try:
