@@ -1,0 +1,62 @@
+name: Game quality checks
+
+on:
+  push:
+    paths:
+      - "kotatsu-soft/game-projects/**"
+      - "kotatsu-soft/shared/specs/spec_game_links.json"
+      - "kotatsu-soft/ai-core/src/game_syntax_check.py"
+      - "kotatsu-soft/ai-core/src/portal_listing_check.py"
+      - "kotatsu-soft/ai-core/scripts/check_game_quality.py"
+      - "kotatsu-soft/ai-core/tests/test_game_syntax_check.py"
+      - "kotatsu-soft/ai-core/tests/test_portal_listing_integration.py"
+      - ".github/workflows/game-quality.yml"
+  pull_request:
+    paths:
+      - "kotatsu-soft/game-projects/**"
+      - "kotatsu-soft/shared/specs/spec_game_links.json"
+      - "kotatsu-soft/ai-core/src/game_syntax_check.py"
+      - "kotatsu-soft/ai-core/src/portal_listing_check.py"
+      - "kotatsu-soft/ai-core/scripts/check_game_quality.py"
+      - "kotatsu-soft/ai-core/tests/test_game_syntax_check.py"
+      - "kotatsu-soft/ai-core/tests/test_portal_listing_integration.py"
+      - ".github/workflows/game-quality.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  game-quality:
+    name: Syntax + portal listing
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kotatsu-soft/ai-core
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run quality CLI
+        run: python scripts/check_game_quality.py
+
+      - name: Run quality pytest
+        run: |
+          pytest -q \
+            tests/test_game_syntax_check.py \
+            tests/test_portal_listing_integration.py

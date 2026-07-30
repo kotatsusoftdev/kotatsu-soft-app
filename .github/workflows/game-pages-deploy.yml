@@ -20,7 +20,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  quality:
+    name: Pre-deploy quality gate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kotatsu-soft/ai-core
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check game syntax and portal listing
+        run: python scripts/check_game_quality.py
+
   deploy:
+    needs: quality
     runs-on: ubuntu-latest
     environment:
       name: github-pages

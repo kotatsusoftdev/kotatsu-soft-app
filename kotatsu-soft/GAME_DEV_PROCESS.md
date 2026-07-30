@@ -275,6 +275,28 @@ python scripts/link_spec_to_game.py \
 3. `game-projects/index.html` にカードを追加し、`data-game-id` / `data-stat-id` / `sendPlayCount` を同一 `game_id` にする
 4. `game-projects/assets/{NNN}_{slug}.png` にサムネを置く
 5. 仕様・会議リンクがポータルから辿れることを確認する
+6. 品質ゲート（§9.3）をローカルまたは CI で通す
+
+### 9.3 品質管理（構文検知・ポータル掲載連携）
+
+完成ゲーム公開前の自動品質ゲート。実装は `ai-core` 側。
+
+| チェック | 内容 | 入口 |
+|----------|------|------|
+| HTML/JS 構文 | `game-projects/*/src/index.html`・ポータル・`common/*.js` の DOCTYPE / `<script>`・`<style>` 対応・インライン／外部 JS 構文（Node `node --check`） | `game_syntax_check.py` |
+| ポータル自動掲載連携 | レジストリで紐づき実ファイルがあるゲームが、ポータルカード・プレイリンク・`data-game-id` / `data-stat-id`・`sendPlayCount` と一致していること | `portal_listing_check.py` |
+
+```bash
+cd kotatsu-soft/ai-core
+python scripts/check_game_quality.py
+# または
+pytest -q tests/test_game_syntax_check.py tests/test_portal_listing_integration.py
+```
+
+- CI: リポジトリルートの `.github/workflows/game-quality.yml`
+- Pages デプロイ前ゲート: `.github/workflows/game-pages-deploy.yml` の `quality` ジョブ
+
+仮登録のみ（HTML 未作成）のゲームは掲載連携の対象外。実ファイルが存在する完成ゲームだけを検証する。
 
 ---
 
@@ -357,6 +379,7 @@ CLI・Discord からの起動手順は [README.md](./README.md) の「開発完�
 - [ ] `KotatsuStats.sendPlayCount("{game_id}")` を入れる（予約 ID と一致）
 - [ ] ポータルにカード・サムネ・`data-game-id` / `data-stat-id` を追加する（同一 ID）
 - [ ] （必要なときだけ）`link_spec_to_game.py` でタイトルやパスを更新する
+- [ ] `python scripts/check_game_quality.py` で構文・ポータル掲載連携を通す
 - [ ] `main` に push し、Pages 反映を確認する
 - [ ] `shared/review/review_{stem}.md` にプレイテスト結果を残す
 - [ ] 反省会（CLI または Discord）で教訓を更新する
@@ -375,6 +398,7 @@ CLI・Discord からの起動手順は [README.md](./README.md) の「開発完�
 
 | 日付 | 要約 |
 |------|------|
+| 2026-07-30 | 品質管理を追加。完成ゲーム HTML/JS 構文検知とポータル自動掲載連携テスト（CI・Pages デプロイ前ゲート） |
 | 2026-07-30 | 企画会議グランドルールを `shared/meeting/grand_rules.yaml` に正本化。PM/Dev/Marketing config から共有制約を分離 |
 | 2026-07-30 | 仕様作成時の game_id 自動採番。stats.js 一本化。ID 一致規約を明文化 |
 | 2026-07-30 | チャンネル役割分離。社長命令は選択のみ、経過・結果は企画検討／反省会チャンネルへ |

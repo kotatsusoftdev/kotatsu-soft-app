@@ -73,6 +73,21 @@ copy .env.example .env
 python src/main.py
 ```
 
+## 品質管理（完成ゲーム）
+
+完成ゲームの HTML/JS 構文と、レジストリ↔ポータル掲載の一貫性を自動検証できます。
+
+```bash
+cd kotatsu-soft/ai-core
+python scripts/check_game_quality.py
+```
+
+- 構文: ゲーム `index.html`・ポータル・`common/*.js`（JS は Node.js の `node --check`）
+- 掲載連携: 実ファイルがあるリンク済みゲームがポータルカード / `data-game-id` / `sendPlayCount` と一致すること
+- CI: `.github/workflows/game-quality.yml`。Pages デプロイ前にも同チェックが走ります
+
+詳細は [GAME_DEV_PROCESS.md](./GAME_DEV_PROCESS.md) §9.3。
+
 ## 補足
 
 - ai-core/ は Discord Bot の起動と AI 制御を担います
