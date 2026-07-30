@@ -86,6 +86,36 @@
       cursor: crosshair;
     }
 
+    .share-bar {
+      display: none;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .share-bar.is-visible {
+      display: flex;
+    }
+
+    .share-btn {
+      appearance: none;
+      cursor: pointer;
+      color: #6b4a3a;
+      border: 1px solid rgba(107, 74, 58, 0.28);
+      background: rgba(255, 250, 242, 0.92);
+      border-radius: 999px;
+      padding: 8px 16px;
+      font: inherit;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      transition: background 140ms ease, transform 140ms ease;
+    }
+
+    .share-btn:hover,
+    .share-btn:focus-visible {
+      background: rgba(255, 255, 255, 0.98);
+      transform: translateY(-1px);
+    }
+
     .hint {
       font-size: 12px;
       letter-spacing: 0.03em;
@@ -103,6 +133,9 @@
       <div class="brand">MATATABI CHAOS</div>
     </div>
     <canvas id="game" width="400" height="600" aria-label="マタタビ大合唱"></canvas>
+    <div class="share-bar" id="share-bar" hidden>
+      <button type="button" class="share-btn" id="share-x">Xでシェア</button>
+    </div>
     <div class="hint">クリック/タップでマタタビ配置 ・ Rキーでリトライ</div>
   </div>
 
@@ -113,6 +146,8 @@
 
       const canvas = document.getElementById("game");
       const ctx = canvas.getContext("2d");
+      const shareBar = document.getElementById("share-bar");
+      const shareBtn = document.getElementById("share-x");
 
       const W = canvas.width;
       const H = canvas.height;
@@ -157,11 +192,34 @@
       let ceilingTimer = 0;
       let feverActive = false;
       let resultTimer = 0;
+      let lastClear = false;
       let lastTime = 0;
       let audioCtx = null;
       let chorusVoices = [];
 
       const sendPlayCount = window.KotatsuStats && window.KotatsuStats.sendPlayCount;
+
+      function setShareVisible(visible) {
+        if (!shareBar) return;
+        shareBar.hidden = !visible;
+        shareBar.classList.toggle("is-visible", visible);
+      }
+
+      function buildShareText(isClear, shareScore) {
+        if (isClear) {
+          return `マタタビ大合唱で ${shareScore}段つみあげた！ CAOS CLEAR!\n#コタツソフト #マタタビ大合唱`;
+        }
+        return `マタタビ大合唱で ${shareScore}段… 猫が制御不能！ GAME OVER\n#コタツソフト #マタタビ大合唱`;
+      }
+
+      function openXShare() {
+        const text = buildShareText(lastClear, score);
+        const url = `${location.origin}${location.pathname}`;
+        const intent = new URL("https://twitter.com/intent/tweet");
+        intent.searchParams.set("text", text);
+        intent.searchParams.set("url", url);
+        window.open(intent.toString(), "_blank", "noopener,noreferrer");
+      }
 
       function ensureAudio() {
         if (!audioCtx) {
@@ -440,6 +498,7 @@
         feverActive = false;
         resultTimer = 0;
         stopChorusVoices();
+        setShareVisible(false);
       }
 
       function startGame() {
@@ -521,8 +580,10 @@
 
       function goResult(isClear) {
         stopChorusVoices();
+        lastClear = isClear;
         state = isClear ? STATE.RESULT : STATE.GAMEOVER;
         resultTimer = 0;
+        setShareVisible(true);
       }
 
       function retry() {
@@ -563,6 +624,13 @@
 
       canvas.addEventListener("pointerdown", onPointerDown, { passive: false });
       window.addEventListener("keydown", onKeyDown, { passive: false });
+      if (shareBtn) {
+        shareBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openXShare();
+        });
+      }
 
       function updatePlaying(dt) {
         timeLeft -= dt;
@@ -753,7 +821,7 @@
           ctx.globalAlpha = pulse;
           ctx.font = "bold 16px Trebuchet MS, sans-serif";
           ctx.fillStyle = "#ffe082";
-          ctx.fillText("タップ / Rキーでリトライ", W / 2, H * 0.58);
+          ctx.fillText("タップでリトライ / Xでシェア", W / 2, H * 0.58);
           ctx.globalAlpha = 1;
         }
       }
