@@ -195,7 +195,8 @@ game-projects/
 ├── index.html                 # ポータル
 ├── assets/                    # サムネ等
 ├── common/
-│   └── stats.js               # ポータル／ゲーム共用の計測クライアント
+│   ├── stats.js               # ポータル／ゲーム共用の計測クライアント
+│   └── storage.js             # ログイン不要のローカルセーブヘルパー
 └── {NNN}_{slug}/
     └── src/
         └── index.html         # ゲーム本体
@@ -219,6 +220,27 @@ KotatsuStats.sendPlayCount("your_game_id");
 ```
 
 引数の `game_id` は仕様作成時に採番されたスラッグ、ディレクトリ名のスラッグ、ポータルの `data-game-id` / `data-stat-id` と **すべて一致**させる。短名別名は禁止。予約キー `pv` はポータル PV 専用でゲーム ID に使わない。
+
+### 7.4 ローカルセーブ（ログイン不要）
+
+ハイスコアなど端末内だけで保持するデータは `common/storage.js`（`window.KotatsuStorage`）を使う。認証・サーバー同期は行わない。
+
+| API | 用途 |
+|-----|------|
+| `KotatsuStorage.get(gameId, key)` | JSON を読み取る（欠落・失敗時は `null`） |
+| `KotatsuStorage.set(gameId, key, value)` | JSON で保存（成功 `true` / 失敗 `false`） |
+| `KotatsuStorage.remove(gameId, key)` | 1 キー削除 |
+| `KotatsuStorage.clear(gameId)` | 当該 `gameId` のキーをすべて削除 |
+| `KotatsuStorage.buildKey(gameId, key)` | 内部キー `kotatsu:{gameId}:{key}` |
+
+ゲームから `../../common/storage.js` を読み込み、例:
+
+```javascript
+const best = KotatsuStorage.get("your_game_id", "highScore") || 0;
+KotatsuStorage.set("your_game_id", "highScore", best);
+```
+
+`gameId` は統計連携と同じスラッグと一致させる。private モードや容量超過でも例外を外へ出さない（呼び出し側は戻り値で判定する）。
 
 ---
 
@@ -377,6 +399,7 @@ CLI・Discord からの起動手順は [README.md](./README.md) の「開発完�
 - [ ] 仕様書・レジストリ・Discord 通知の **自動採番 `game_id` / 予定パス** を確認する
 - [ ] 予約どおりの `game-projects/{NNN}_{slug}/src/index.html` を実装する（単一 HTML・外部エンジンなし）
 - [ ] `KotatsuStats.sendPlayCount("{game_id}")` を入れる（予約 ID と一致）
+- [ ] 永続化が必要なら `KotatsuStorage`（`common/storage.js`）を使い、`game_id` でキーを名前空間化する
 - [ ] ポータルにカード・サムネ・`data-game-id` / `data-stat-id` を追加する（同一 ID）
 - [ ] （必要なときだけ）`link_spec_to_game.py` でタイトルやパスを更新する
 - [ ] `python scripts/check_game_quality.py` で構文・ポータル掲載連携を通す
@@ -398,6 +421,7 @@ CLI・Discord からの起動手順は [README.md](./README.md) の「開発完�
 
 | 日付 | 要約 |
 |------|------|
+| 2026-07-30 | ログイン不要のローカルセーブ共通ヘルパー（`KotatsuStorage` / `storage.js`）を追加。matatabi_chaos にハイスコア配線 |
 | 2026-07-30 | 品質管理を追加。完成ゲーム HTML/JS 構文検知とポータル自動掲載連携テスト（CI・Pages デプロイ前ゲート） |
 | 2026-07-30 | 企画会議グランドルールを `shared/meeting/grand_rules.yaml` に正本化。PM/Dev/Marketing config から共有制約を分離 |
 | 2026-07-30 | 仕様作成時の game_id 自動採番。stats.js 一本化。ID 一致規約を明文化 |

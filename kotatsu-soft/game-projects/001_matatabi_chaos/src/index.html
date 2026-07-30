@@ -140,6 +140,7 @@
   </div>
 
   <script src="../../common/stats.js"></script>
+  <script src="../../common/storage.js"></script>
   <script>
     (() => {
       "use strict";
@@ -166,6 +167,8 @@
       const CEILING_FAIL_TIME = 2.2;
       const CAT_WALK_SPEED = 150;
       const GIANT_SCALE = 2;
+      const GAME_ID = "matatabi_chaos";
+      const HIGH_SCORE_KEY = "highScore";
 
       const STATE = {
         TITLE: "TITLE",
@@ -187,6 +190,8 @@
       let cats = [];
       let matatabi = null;
       let score = 0;
+      let bestScore = 0;
+      let isNewRecord = false;
       let timeLeft = TIME_LIMIT;
       let spawnTimer = 0;
       let ceilingTimer = 0;
@@ -198,6 +203,22 @@
       let chorusVoices = [];
 
       const sendPlayCount = window.KotatsuStats && window.KotatsuStats.sendPlayCount;
+      const storage = window.KotatsuStorage || null;
+
+      function loadBestScore() {
+        if (!storage || typeof storage.get !== "function") return 0;
+        const saved = storage.get(GAME_ID, HIGH_SCORE_KEY);
+        const num = Number(saved);
+        if (!Number.isFinite(num) || num < 0) return 0;
+        return Math.trunc(num);
+      }
+
+      function saveBestScore(value) {
+        if (!storage || typeof storage.set !== "function") return false;
+        return storage.set(GAME_ID, HIGH_SCORE_KEY, value);
+      }
+
+      bestScore = loadBestScore();
 
       function setShareVisible(visible) {
         if (!shareBar) return;
@@ -581,6 +602,11 @@
       function goResult(isClear) {
         stopChorusVoices();
         lastClear = isClear;
+        isNewRecord = score > bestScore;
+        if (isNewRecord) {
+          bestScore = score;
+          saveBestScore(bestScore);
+        }
         state = isClear ? STATE.RESULT : STATE.GAMEOVER;
         resultTimer = 0;
         setShareVisible(true);
@@ -777,11 +803,15 @@
         ctx.fillText("マタタビを置いて猫を誘導！", W / 2, 248);
         ctx.fillText(`残り${FEVER_DURATION}秒はでかい猫フィーバー！`, W / 2, 268);
 
+        ctx.font = "bold 16px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#8a5f4a";
+        ctx.fillText(`ベスト ${bestScore}段`, W / 2, 298);
+
         const pulse = 0.55 + Math.sin(performance.now() * 0.008) * 0.45;
         ctx.globalAlpha = pulse;
         ctx.font = "bold 20px Trebuchet MS, sans-serif";
         ctx.fillStyle = "#7cb342";
-        ctx.fillText("START", W / 2, 330);
+        ctx.fillText("START", W / 2, 340);
         ctx.globalAlpha = 1;
 
         drawDemoCat(W / 2, 400);
@@ -801,7 +831,7 @@
         m.draw(t);
       }
 
-      function drawOverlay(title, subtitle, accent, showRetry) {
+      function drawOverlay(title, subtitle, accent, showRetry, bestLine) {
         ctx.fillStyle = "rgba(74, 50, 40, 0.45)";
         ctx.fillRect(0, 0, W, H);
 
@@ -810,20 +840,32 @@
 
         ctx.font = "bold 34px Trebuchet MS, sans-serif";
         ctx.fillStyle = accent;
-        ctx.fillText(title, W / 2, H * 0.38);
+        ctx.fillText(title, W / 2, H * 0.36);
 
         ctx.font = "bold 18px Trebuchet MS, sans-serif";
         ctx.fillStyle = "#fff8ef";
-        ctx.fillText(subtitle, W / 2, H * 0.48);
+        ctx.fillText(subtitle, W / 2, H * 0.45);
+
+        if (bestLine) {
+          ctx.font = "bold 15px Trebuchet MS, sans-serif";
+          ctx.fillStyle = isNewRecord ? "#ffd54f" : "#fff8ef";
+          ctx.fillText(bestLine, W / 2, H * 0.52);
+        }
 
         if (showRetry) {
           const pulse = 0.5 + Math.sin(performance.now() * 0.01) * 0.5;
           ctx.globalAlpha = pulse;
           ctx.font = "bold 16px Trebuchet MS, sans-serif";
           ctx.fillStyle = "#ffe082";
-          ctx.fillText("タップでリトライ / Xでシェア", W / 2, H * 0.58);
+          ctx.fillText("タップでリトライ / Xでシェア", W / 2, H * 0.6);
           ctx.globalAlpha = 1;
         }
+      }
+
+      function bestScoreLine() {
+        return isNewRecord
+          ? `ベスト ${bestScore}段 新記録!`
+          : `ベスト ${bestScore}段`;
       }
 
       function drawFeverOverlay(t) {
@@ -857,9 +899,15 @@
         if (state === STATE.TITLE) {
           drawTitle();
         } else if (state === STATE.RESULT) {
-          drawOverlay("CAOS CLEAR!", `つみあげ高さ ${score}段`, "#ffd54f", true);
+          drawOverlay("CAOS CLEAR!", `つみあげ高さ ${score}段`, "#ffd54f", true, bestScoreLine());
         } else if (state === STATE.GAMEOVER) {
-          drawOverlay("GAME OVER", `猫が制御不能で天井へ… (つみあげ高さ ${score}段)`, "#ef5350", true);
+          drawOverlay(
+            "GAME OVER",
+            `猫が制御不能で天井へ… (つみあげ高さ ${score}段)`,
+            "#ef5350",
+            true,
+            bestScoreLine()
+          );
         }
       }
 
