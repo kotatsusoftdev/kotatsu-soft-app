@@ -19,3 +19,19 @@ def test_config_load_fails_when_channel_id_is_invalid(monkeypatch: pytest.Monkey
         config_module.Config.load()
 
     assert "MEETING_CHANNEL_ID" in str(exc_info.value)
+
+
+def test_config_load_requires_post_mortem_channel(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("POST_MORTEM_CHANNEL_ID", raising=False)
+
+    with pytest.raises(config_module.ConfigError) as exc_info:
+        config_module.Config.load()
+
+    assert "POST_MORTEM_CHANNEL_ID" in str(exc_info.value)
+
+
+def test_config_load_reads_channel_ids(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = config_module.Config.load()
+    assert cfg.PRESIDENT_ORDER_CHANNEL_ID == 111
+    assert cfg.MEETING_CHANNEL_ID == 222
+    assert cfg.POST_MORTEM_CHANNEL_ID == 333

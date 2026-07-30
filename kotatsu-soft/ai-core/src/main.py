@@ -359,6 +359,7 @@ class PostMortemConfirmView(discord.ui.View):
         artifact_stem: str,
         game_path: str,
         api_key: str,
+        results_channel_id: int,
     ):
         super().__init__(timeout=600)
         self.game_id = game_id
@@ -366,6 +367,7 @@ class PostMortemConfirmView(discord.ui.View):
         self.artifact_stem = artifact_stem
         self.game_path = game_path
         self.api_key = api_key
+        self.results_channel_id = results_channel_id
 
         start_button = discord.ui.Button(
             label="はじめる",
@@ -409,20 +411,26 @@ class PostMortemConfirmView(discord.ui.View):
             await interaction.message.edit(view=self)
 
         await interaction.response.send_message(
-            f"🔄 `{self.game_id}` の教訓を更新中です…（少々お待ちください）",
+            f"🔄 `{self.game_id}` の教訓を更新中です…",
             ephemeral=False,
         )
 
         try:
+            results_channel = await resolve_text_channel(self.results_channel_id)
+            if results_channel is None:
+                await interaction.followup.send(
+                    "⚠️ 反省会チャンネルが見つかりません。"
+                    "POST_MORTEM_CHANNEL_ID の設定を確認してください。"
+                )
+                return
+
             updates, warnings = await asyncio.to_thread(
                 run_post_mortem,
                 artifact_stem=self.artifact_stem,
                 api_key=self.api_key,
                 game_path=self.game_path or None,
             )
-            channel = interaction.channel
-            if isinstance(channel, discord.TextChannel):
-                await publish_post_mortem_results(channel, updates, warnings)
+            await publish_post_mortem_results(results_channel, updates, warnings)
         except Exception as exc:
             await interaction.followup.send(f"[post_mortem] 失敗しました: {exc}")
         finally:
@@ -430,19 +438,89 @@ class PostMortemConfirmView(discord.ui.View):
             self.stop()
 
 
-async def handle_post_mortem_channel_message(message: discord.Message, cfg: Config) -> None:
+async def resolve_text_channel(channel_id: int) -> Optional[discord.TextChannel]:
+    channel = bot.get_channel(channel_id)
+    if channel is None:
+        try:
+            channel = await bot.fetch_channel(channel_id)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            channel = None
+    if isinstance(channel, discord.TextChannel):
+        return channel
+    return None
+
+
+async def resolve_meeting_channel() -> Optional[discord.TextChannel]:
+    cfg = _get_config_or_raise()
+    return await resolve_text_channel(cfg.MEETING_CHANNEL_ID)
+
+
+async def resolve_post_mortem_channel() -> Optional[discord.TextChannel]:
+    cfg = _get_config_or_raise()
+    return await resolve_text_channel(cfg.POST_MORTEM_CHANNEL_ID)
+
+
+async def start_meeting_from_theme(
+    theme: str,
+    *,
+    order_channel: discord.abc.Messageable,
+) -> None:
+    meeting_channel = await resolve_meeting_channel()
+    if meeting_channel is None:
+        await order_channel.send(
+            "⚠️ 企画検討チャンネルが見つかりません。MEETING_CHANNEL_ID の設定を確認してください。"
+        )
+        return
+
+    reserved = await _try_reserve_meeting_channel(meeting_channel.id)
+    if not reserved:
+        await meeting_channel.send(
+            "⏳ 企画検討はすでに進行中です。現在の会議が終わるまでお待ちください。"
+        )
+        await order_channel.send(
+            f"⏳ 企画検討はすでに進行中です。企画検討チャンネル <#{meeting_channel.id}> を確認してください。"
+        )
+        return
+
+    await meeting_channel.send(
+        f"📥 了解しました。テーマ「{theme}」でただちにPM AIへ仕様策定を回します。"
+    )
+    try:
+        await run_meeting_round(theme, meeting_channel)
+    finally:
+        await _release_meeting_channel(meeting_channel.id)
+
+
+async def propose_post_mortem(
+    *,
+    order_channel: discord.abc.Messageable,
+    cfg: Config,
+) -> None:
     async with _post_mortem_lock:
         if _post_mortem_running:
-            await message.channel.send("⏳ 反省会実行中です。完了までお待ちください。")
+            await order_channel.send("⏳ 反省会実行中です。完了までお待ちください。")
             return
+
+    results_channel = await resolve_post_mortem_channel()
+    if results_channel is None:
+        await order_channel.send(
+            "⚠️ 反省会チャンネルが見つかりません。"
+            "POST_MORTEM_CHANNEL_ID の設定を確認してください。"
+        )
+        return
 
     latest = get_latest_linked_game()
     if latest is None:
-        await message.channel.send(
+        await order_channel.send(
             "⚠️ 紐づいたゲームがありません。"
             "`spec_game_links.json` で仕様書とゲームをリンクしてから再度送ってください。"
         )
         return
+
+    async with _post_mortem_lock:
+        if _post_mortem_running:
+            await order_channel.send("⏳ 反省会実行中です。完了までお待ちください。")
+            return
 
     view = PostMortemConfirmView(
         game_id=str(latest["game_id"]),
@@ -450,8 +528,98 @@ async def handle_post_mortem_channel_message(message: discord.Message, cfg: Conf
         artifact_stem=str(latest["artifact_stem"]),
         game_path=str(latest.get("game_path") or ""),
         api_key=cfg.GEMINI_API_KEY,
+        results_channel_id=results_channel.id,
     )
-    await message.channel.send(build_post_mortem_proposal_message(latest), view=view)
+    await order_channel.send(
+        f"反省会チャンネル <#{results_channel.id}> で確認してください。"
+    )
+    await results_channel.send(build_post_mortem_proposal_message(latest), view=view)
+
+
+class MeetingThemeModal(discord.ui.Modal, title="企画会議のテーマ"):
+    def __init__(self) -> None:
+        super().__init__()
+        self.theme_input = discord.ui.TextInput(
+            label="テーマ",
+            style=discord.TextStyle.paragraph,
+            required=True,
+            max_length=1000,
+            placeholder="例: テトリスと猫を掛け合わせたゲームを作って",
+        )
+        self.add_item(self.theme_input)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        theme = self.theme_input.value.strip()
+        if not theme:
+            await interaction.response.send_message(
+                "⚠️ テーマが空です。もう一度やり直してください。",
+                ephemeral=False,
+            )
+            return
+
+        meeting_channel = await resolve_meeting_channel()
+        if meeting_channel is None:
+            await interaction.response.send_message(
+                "⚠️ 企画検討チャンネルが見つかりません。MEETING_CHANNEL_ID の設定を確認してください。",
+                ephemeral=False,
+            )
+            return
+
+        await interaction.response.send_message(
+            f"企画検討チャンネル <#{meeting_channel.id}> で開始します。",
+            ephemeral=False,
+        )
+        channel = interaction.channel
+        if channel is None:
+            return
+        await start_meeting_from_theme(theme, order_channel=channel)
+
+
+class ProcessSelectView(discord.ui.View):
+    def __init__(self) -> None:
+        super().__init__(timeout=600)
+
+        meeting_button = discord.ui.Button(
+            label="企画会議",
+            style=discord.ButtonStyle.primary,
+            custom_id="process_select_meeting",
+        )
+        meeting_button.callback = self._on_meeting
+        self.add_item(meeting_button)
+
+        post_mortem_button = discord.ui.Button(
+            label="反省会",
+            style=discord.ButtonStyle.secondary,
+            custom_id="process_select_post_mortem",
+        )
+        post_mortem_button.callback = self._on_post_mortem
+        self.add_item(post_mortem_button)
+
+    def _disable_buttons(self) -> None:
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+
+    async def _on_meeting(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_modal(MeetingThemeModal())
+        self._disable_buttons()
+        if interaction.message is not None:
+            await interaction.message.edit(view=self)
+        self.stop()
+
+    async def _on_post_mortem(self, interaction: discord.Interaction) -> None:
+        self._disable_buttons()
+        await interaction.response.edit_message(view=self)
+
+        cfg = _get_config_or_raise()
+        channel = interaction.channel
+        if channel is None:
+            await interaction.followup.send("⚠️ チャンネルを解決できませんでした。")
+            self.stop()
+            return
+
+        await propose_post_mortem(order_channel=channel, cfg=cfg)
+        self.stop()
 
 
 @bot.event
@@ -612,37 +780,12 @@ async def on_message(message: discord.Message):
     if message.author == bot.user or message.author.bot:
         return
 
-    if message.channel.id == cfg.MUCHABURI_CHANNEL_ID:
-        print(f"[main] Received message in muchaburi channel: {message.content}")
-        await message.channel.send("📥 了解しました。ただちにPM AIへ仕様策定を回します。")
-
-        meeting_channel = bot.get_channel(cfg.MEETING_CHANNEL_ID)
-        if meeting_channel is None:
-            try:
-                meeting_channel = await bot.fetch_channel(cfg.MEETING_CHANNEL_ID)
-            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                meeting_channel = None
-
-        if not isinstance(meeting_channel, discord.TextChannel):
-            await message.channel.send(
-                "⚠️ #コタツ会議室 が見つかりません。MEETING_CHANNEL_ID の設定を確認してください。"
-            )
-            return
-
-        reserved = await _try_reserve_meeting_channel(meeting_channel.id)
-        if not reserved:
-            await message.channel.send(
-                "⏳ 企画検討はすでに進行中です。現在の会議が終わるまでお待ちください。"
-            )
-            return
-
-        try:
-            await run_meeting_round(message.content, meeting_channel)
-        finally:
-            await _release_meeting_channel(meeting_channel.id)
-    elif message.channel.id == cfg.POST_MORTEM_CHANNEL_ID:
-        print(f"[main] Received message in post-mortem channel: {message.content}")
-        await handle_post_mortem_channel_message(message, cfg)
+    if message.channel.id == cfg.PRESIDENT_ORDER_CHANNEL_ID:
+        print(f"[main] Received message in president order channel: {message.content}")
+        await message.channel.send(
+            "どのプロセスを開始しますか？",
+            view=ProcessSelectView(),
+        )
 
     await bot.process_commands(message)
 

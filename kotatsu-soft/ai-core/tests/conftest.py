@@ -13,8 +13,9 @@ if str(SRC_DIR) not in sys.path:
 @pytest.fixture(autouse=True)
 def base_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DISCORD_TOKEN", "dummy-token")
-    monkeypatch.setenv("MUCHABURI_CHANNEL_ID", "111")
+    monkeypatch.setenv("PRESIDENT_ORDER_CHANNEL_ID", "111")
     monkeypatch.setenv("GEMINI_API_KEY", "dummy-gemini-key")
     monkeypatch.setenv("MEETING_CHANNEL_ID", "222")
     monkeypatch.setenv("POST_MORTEM_CHANNEL_ID", "333")
     monkeypatch.setenv("PRESIDENT_MENTION", "@president")
+

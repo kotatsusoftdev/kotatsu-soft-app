@@ -20,18 +20,31 @@ class FakeSourceChannel:
 
 
 @pytest.mark.asyncio
-async def test_post_mortem_channel_proposes_latest_game(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_legacy_post_mortem_channel_does_not_trigger(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     cfg = Config.load()
     monkeypatch.setattr(main, "_config", cfg)
-    monkeypatch.setattr(main, "_post_mortem_running", False)
+    monkeypatch.setattr(main.bot, "process_commands", AsyncMock())
 
-    source_channel = FakeSourceChannel(cfg.POST_MORTEM_CHANNEL_ID)
+    source_channel = FakeSourceChannel(999999)
     message = SimpleNamespace(
         author=SimpleNamespace(bot=False),
         channel=source_channel,
         content="反省会お願い",
     )
 
+    await main.on_message(message)
+    assert source_channel.messages == []
+
+
+@pytest.mark.asyncio
+async def test_propose_post_mortem_posts_proposal_to_post_mortem_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = Config.load()
+    monkeypatch.setattr(main, "_config", cfg)
+    monkeypatch.setattr(main, "_post_mortem_running", False)
     monkeypatch.setattr(
         main,
         "get_latest_linked_game",
@@ -42,36 +55,65 @@ async def test_post_mortem_channel_proposes_latest_game(monkeypatch: pytest.Monk
             "game_path": "game-projects/001_matatabi_chaos/src/index.html",
         },
     )
-    process_commands_mock = AsyncMock()
-    monkeypatch.setattr(main.bot, "process_commands", process_commands_mock)
 
-    await main.on_message(message)
+    results_channel = FakeSourceChannel(cfg.POST_MORTEM_CHANNEL_ID)
+    monkeypatch.setattr(
+        main,
+        "resolve_post_mortem_channel",
+        AsyncMock(return_value=results_channel),
+    )
 
-    assert source_channel.messages
-    proposal = source_channel.messages[0]
+    order_channel = FakeSourceChannel(cfg.PRESIDENT_ORDER_CHANNEL_ID)
+    await main.propose_post_mortem(order_channel=order_channel, cfg=cfg)
+
+    assert len(order_channel.messages) == 1
+    assert f"<#{cfg.POST_MORTEM_CHANNEL_ID}>" in order_channel.messages[0]["content"]
+    assert "確認してください" in order_channel.messages[0]["content"]
+    assert "view" not in order_channel.messages[0]["kwargs"]
+
+    assert len(results_channel.messages) == 1
+    proposal = results_channel.messages[0]
     assert "matatabi_chaos" in proposal["content"]
     assert "demo_stem" in proposal["content"]
     assert "view" in proposal["kwargs"]
-    process_commands_mock.assert_awaited_once_with(message)
+    view = proposal["kwargs"]["view"]
+    assert view.results_channel_id == cfg.POST_MORTEM_CHANNEL_ID
 
 
 @pytest.mark.asyncio
-async def test_post_mortem_channel_reports_missing_link(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_propose_post_mortem_reports_missing_results_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = Config.load()
+    monkeypatch.setattr(main, "_config", cfg)
+    monkeypatch.setattr(main, "_post_mortem_running", False)
+    monkeypatch.setattr(main, "resolve_post_mortem_channel", AsyncMock(return_value=None))
+
+    order_channel = FakeSourceChannel(cfg.PRESIDENT_ORDER_CHANNEL_ID)
+    await main.propose_post_mortem(order_channel=order_channel, cfg=cfg)
+    assert "反省会チャンネルが見つかりません" in order_channel.messages[0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_propose_post_mortem_reports_missing_link(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     cfg = Config.load()
     monkeypatch.setattr(main, "_config", cfg)
     monkeypatch.setattr(main, "_post_mortem_running", False)
     monkeypatch.setattr(main, "get_latest_linked_game", lambda: None)
-    monkeypatch.setattr(main.bot, "process_commands", AsyncMock())
 
-    source_channel = FakeSourceChannel(cfg.POST_MORTEM_CHANNEL_ID)
-    message = SimpleNamespace(
-        author=SimpleNamespace(bot=False),
-        channel=source_channel,
-        content="start",
+    results_channel = FakeSourceChannel(cfg.POST_MORTEM_CHANNEL_ID)
+    monkeypatch.setattr(
+        main,
+        "resolve_post_mortem_channel",
+        AsyncMock(return_value=results_channel),
     )
 
-    await main.on_message(message)
-    assert "紐づいたゲームがありません" in source_channel.messages[0]["content"]
+    order_channel = FakeSourceChannel(cfg.PRESIDENT_ORDER_CHANNEL_ID)
+    await main.propose_post_mortem(order_channel=order_channel, cfg=cfg)
+    assert "紐づいたゲームがありません" in order_channel.messages[0]["content"]
+    assert results_channel.messages == []
 
 
 def test_build_and_format_post_mortem_messages() -> None:
