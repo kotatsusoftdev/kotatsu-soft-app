@@ -72,3 +72,23 @@ def test_meeting_chat_log_writer_writes_jsonl(tmp_path: Path, monkeypatch: pytes
     assert payload["type"] == "decision"
     assert payload["reply_to"] == "msg_004"
     assert message_id.startswith("msg_")
+    assert "Go ✅" in payload["message"]
+
+
+def test_log_decision_abort_message(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("meeting_chat_log.repo_root", lambda: tmp_path)
+    writer = MeetingChatLogWriter(artifact_stem="theme_abort_20260730_120000")
+    writer.log_meeting_start("中止テスト")
+
+    message_id = writer.log_decision(decision="abort", phase="FINAL", turn=10, reply_to="msg_001")
+    lines = writer.path.read_text(encoding="utf-8").splitlines()
+    system_payload = __import__("json").loads(lines[-2])
+    decision_payload = __import__("json").loads(lines[-1])
+
+    assert system_payload["message"] == "Go / NoGo / 中止 判定"
+    assert decision_payload["type"] == "decision"
+    assert decision_payload["role"] == "president"
+    assert decision_payload["reply_to"] == "msg_001"
+    assert "中止 ⏹" in decision_payload["message"]
+    assert "この企画会議を終了します。" in decision_payload["message"]
+    assert message_id.startswith("msg_")

@@ -74,12 +74,16 @@ def load_agent_profile(agents_root: Path, role: str) -> dict[str, str]:
     agent = config.get("agent") or {}
     llm = agent.get("llm") or config.get("llm") or {}
     criteria = agent.get("evaluation_criteria") or {}
+    persona = agent.get("persona") or {}
     return {
         "name": str(agent.get("name") or role),
         "title": str(agent.get("title") or role),
         "model": str(llm.get("model") or DEFAULT_MODEL),
         "temperature": str(llm.get("temperature", 0.3)),
         "primary_focus": str(criteria.get("primary_focus") or ROLE_FOCUS.get(role, "")),
+        "tone": str(persona.get("tone") or "").strip(),
+        "mindset": str(persona.get("mindset") or "").strip(),
+        "output_format": str(agent.get("output_format") or "").strip(),
     }
 
 
@@ -239,12 +243,28 @@ def build_evolution_prompt(
         if has_review
         else "レビューが無いので、仕様と会議の『約束』と実装結果のギャップを一次ソースにする。"
     )
+    tone = (profile.get("tone") or "").strip()
+    mindset = (profile.get("mindset") or "").strip()
+    output_format = (profile.get("output_format") or "").strip()
+    persona_lines = ["【口調・スタンス（発表文だけに使う。教訓本文には入れない）】"]
+    if tone:
+        persona_lines.append(f"- 口調: {tone}")
+    if mindset:
+        persona_lines.append(f"- スタンス: {mindset}")
+    if not tone and not mindset:
+        persona_lines.append("- （未設定）自分らしく自然に話す")
+    persona_block = "\n".join(persona_lines)
+    output_format_block = ""
+    if output_format:
+        output_format_block = f"\n【読みやすさ】\n{output_format}\n"
+
     return (
         f"あなたはコタツ・ソフトのAI社員「{profile['name']}（{profile['title']}）」です。\n"
         f"自分の役割（{focus}）だけで防げる／改善できる失敗に限定して教訓を更新してください。\n\n"
         "【目的】\n"
         f"教訓は常にちょうど{LESSON_ITEM_COUNT}個。各項目は1〜2文。スロット数は増やさない。\n"
-        "旧教訓を言い換えるだけは禁止。今回の失敗から得た運用ルールへ意味のある差分で進化させる。\n\n"
+        "旧教訓を言い換えるだけは禁止。今回の失敗から得た運用ルールへ意味のある差分で進化させる。\n"
+        "教訓の文言は中学生でもわかる言葉にする。難しい専門用語・抽象的すぎる言い回しは避ける。\n\n"
         "【抽象化手順】\n"
         "1. 一次ソースから具体的な指摘・原因・修正を拾う\n"
         "2. 自分の役割に関係する失敗だけ残す（役割外は無理に取り込まない）\n"
@@ -252,8 +272,17 @@ def build_evolution_prompt(
         "4. 旧教訓3個の枠を保ったまま、各枠の中身を進化させる（新規枠を増やさない。4個目は作らない）\n\n"
         f"【入力の優先順位】\n{primary_source}\n"
         "仕様書と会議ログは『約束とのズレ』確認用。完成コードは補助材料。\n\n"
+        f"{persona_block}\n"
+        f"{output_format_block}\n"
         "【出力形式】\n"
-        "次の3行だけを出力する。前置き・見出し・引用符・JSONは禁止。\n"
+        "次の2ブロックだけをこの順で出力する。前置き・引用符・JSONは禁止。\n"
+        "【発表文】\n"
+        "自分の口調で、反省した経緯と得た教訓の両方を話す。\n"
+        "例: 「〇〇という出来事があったから、次の教訓を得た」のように、"
+        "何が起きてどう直す／防ぐかを短く語ってから教訓を示す。\n"
+        "発表文の中でも教訓は番号付きで書いてよい。\n\n"
+        "【教訓】\n"
+        "YAML保存用。口調・キャラ言い回しは入れない。中学生でもわかる平易な原則文だけ。\n"
         "1. （更新後の教訓1）\n"
         "2. （更新後の教訓2）\n"
         "3. （更新後の教訓3）\n\n"
@@ -316,6 +345,31 @@ def normalize_lesson(text: str) -> str:
     return items[0]
 
 
+def fallback_speech_from_lessons(items: list[str]) -> str:
+    return "今回の反省会で、次の教訓を得たよ。\n\n" + format_lesson_items(items)
+
+
+def parse_evolution_response(text: str) -> tuple[str, list[str]]:
+    """Split LLM output into Discord speech + YAML lesson items."""
+    raw = (text or "").strip()
+    if not raw:
+        raise ValueError("LLM returned empty evolution response")
+
+    speech_match = re.search(r"【発表文】\s*(.*?)(?=\n\s*【教訓】|\Z)", raw, flags=re.DOTALL)
+    lessons_match = re.search(r"【教訓】\s*(.*)\Z", raw, flags=re.DOTALL)
+
+    if lessons_match:
+        items = normalize_lesson_items(lessons_match.group(1))
+        speech = (speech_match.group(1).strip() if speech_match else "")
+        if not speech:
+            speech = fallback_speech_from_lessons(items)
+        return speech, items
+
+    # Legacy / marker-less: treat whole body as numbered lessons.
+    items = normalize_lesson_items(raw)
+    return fallback_speech_from_lessons(items), items
+
+
 def evolve_lesson_with_llm(
     *,
     client: Any,
@@ -323,7 +377,7 @@ def evolve_lesson_with_llm(
     temperature: float,
     prompt: str,
     request_name: str,
-) -> list[str]:
+) -> tuple[str, list[str]]:
     response = client.models.generate_content(
         model=model,
         contents=prompt,
@@ -333,7 +387,7 @@ def evolve_lesson_with_llm(
         ),
     )
     text = BaseAgent.extract_text_from_response(response)
-    return normalize_lesson_items(text)
+    return parse_evolution_response(text)
 
 
 @dataclass
@@ -343,6 +397,7 @@ class LessonUpdate:
     before: list[str]
     after: list[str]
     path: Path
+    speech: str = ""
 
 
 def run_post_mortem(
@@ -391,12 +446,12 @@ def run_post_mortem(
             temperature = 0.55
 
         if llm_callable is not None:
-            after = normalize_lesson_items(
+            speech, after = parse_evolution_response(
                 llm_callable(role=role, prompt=prompt, model=model, temperature=temperature)
             )
         else:
             assert client is not None
-            after = evolve_lesson_with_llm(
+            speech, after = evolve_lesson_with_llm(
                 client=client,
                 model=model,
                 temperature=temperature,
@@ -418,6 +473,7 @@ def run_post_mortem(
                 before=before,
                 after=after,
                 path=path,
+                speech=speech,
             )
         )
 

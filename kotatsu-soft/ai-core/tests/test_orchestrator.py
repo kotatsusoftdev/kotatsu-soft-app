@@ -5,7 +5,7 @@ import pytest
 
 from agents.dev.agent import DevAgent
 from agents.pm.schemas import PMDecision
-from orchestrator import DynamicOrchestrator, build_president_final_message
+from orchestrator import DynamicOrchestrator, ProposalSelectView, build_president_final_message
 
 
 class StubPM:
@@ -356,6 +356,36 @@ def test_select_next_non_pm_role_starts_with_marketing_then_alternates() -> None
     assert orchestrator._select_next_non_pm_role(history, {"marketing": 1, "dev": 1}) == "marketing"
 
 
+def test_select_next_non_pm_role_ignores_mentions_in_pm_speech() -> None:
+    """PM が @スゴ杉くん を呼んでも、直前の実発言者判定を壊さないこと。"""
+    orchestrator = DynamicOrchestrator(
+        webhook_url=None,
+        pm_agent=StubPM([]),
+        other_agents={"marketing": StubAgent("marketing", ""), "dev": StubAgent("dev", "")},
+        president_mention="@president",
+    )
+
+    history = [
+        "すずかちゃん(PM): まずは @スゴ杉くん(エンジニア) に聞きます",
+        "スゴ杉くん(エンジニア): 技術案です",
+        "すずかちゃん(PM): 続けて @スゴ杉くん(エンジニア) に聞きます",
+        "ヂャイアン(マーケ): マーケ案です",
+        "すずかちゃん(PM): @スゴ杉くん(エンジニア) 、実装負荷は？",
+    ]
+    # 直前の実発言はマーケなので、次は dev（メンション誤認だと marketing 連投になる）
+    assert orchestrator._select_next_non_pm_role(history, {"marketing": 1, "dev": 1}) == "dev"
+
+    assert orchestrator._last_non_pm_role(history) == "marketing"
+    assert orchestrator._history_line_is_speech_by_role(
+        "すずかちゃん(PM): @スゴ杉くん(エンジニア) に聞いて",
+        "dev",
+    ) is False
+    assert orchestrator._history_line_is_speech_by_role(
+        "スゴ杉くん(エンジニア): 技術案です",
+        "dev",
+    ) is True
+
+
 @pytest.mark.asyncio
 async def test_execute_meeting_overrides_pm_target_to_rotation_order() -> None:
     decisions = [
@@ -414,6 +444,71 @@ async def test_execute_meeting_overrides_pm_target_to_rotation_order() -> None:
     assert orchestrator.last_meeting_trace[1]["target_final"] == "marketing"
     assert orchestrator.last_meeting_trace[2]["target_final"] == "dev"
     assert "rotation_adjusted" in orchestrator.last_meeting_trace[2]["guardrails"]
+
+
+@pytest.mark.asyncio
+async def test_execute_meeting_alternates_even_when_pm_always_mentions_dev() -> None:
+    """PM speech が毎回 @スゴ杉くん でも、マーケ連投にならず交互に呼ばれること。"""
+    decisions = [
+        make_decision(
+            speech="すずかちゃん: @スゴ杉くん(エンジニア) に技術案を聞いてみよう",
+            phase="DIVERGENCE",
+            next_action="CALL_AGENT",
+            target_agent="dev",
+            instruction_for_target="技術観点を教えて",
+        ),
+        make_decision(
+            speech="すずかちゃん: ありがとう。もう一度 @スゴ杉くん(エンジニア) に深掘りしてほしいな",
+            phase="DIVERGENCE",
+            next_action="CALL_AGENT",
+            target_agent="dev",
+            instruction_for_target="技術観点を深掘りして",
+        ),
+        make_decision(
+            speech="すずかちゃん: @スゴ杉くん(エンジニア) 、実装負荷の比較もお願い",
+            phase="DIVERGENCE",
+            next_action="CALL_AGENT",
+            target_agent="dev",
+            instruction_for_target="実装負荷を比較して",
+        ),
+        make_decision(
+            speech="すずかちゃん: @スゴ杉くん(エンジニア) 、仕上げの確認を",
+            phase="DIVERGENCE",
+            next_action="CALL_AGENT",
+            target_agent="dev",
+            instruction_for_target="仕上げ確認して",
+        ),
+    ]
+    pm = StubPM(decisions)
+    marketing = StubAgent("marketing", "marketing reply")
+    # history への追記は agent.name を使うため、実運用と同じ表示名にする
+    marketing.name = "ヂャイアン(マーケ)"
+    dev = StubAgent("dev", "dev reply")
+    dev.name = "スゴ杉くん(エンジニア)"
+    channel = StubChannel()
+
+    orchestrator = DynamicOrchestrator(
+        webhook_url=None,
+        pm_agent=pm,
+        other_agents={"marketing": marketing, "dev": dev},
+        president_mention="@president",
+    )
+
+    async def fake_post(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    orchestrator._post_via_webhook = fake_post  # type: ignore[method-assign]
+
+    await orchestrator.execute_meeting("theme", channel)
+
+    assert [t["target_final"] for t in orchestrator.last_meeting_trace[:4]] == [
+        "dev",
+        "marketing",
+        "dev",
+        "marketing",
+    ]
+    assert len(dev.calls) == 2
+    assert len(marketing.calls) == 2
 
 
 @pytest.mark.asyncio
@@ -580,3 +675,94 @@ async def test_execute_meeting_skips_phase_drift_warning_when_converging() -> No
     assert final_pm_speech == "最終的にこの案で決定"
     assert len(history) == 11
     assert not any("進行フェーズがターン目標から逸脱しています" in message for message in channel.messages)
+
+
+@pytest.mark.asyncio
+async def test_proposal_select_view_abort_ends_without_spec_or_rerun(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("meeting_chat_log.repo_root", lambda: tmp_path)
+    from meeting_chat_log import MeetingChatLogWriter
+
+    writer = MeetingChatLogWriter(artifact_stem="abort_view_20260730_120000")
+    writer.log_meeting_start("中止ビューテスト")
+
+    class StubPMAgent:
+        def __init__(self) -> None:
+            self.generate_calls = 0
+
+        async def generate_spec_for_plan(self, *args: Any, **kwargs: Any) -> dict[str, str]:
+            self.generate_calls += 1
+            return {"spec_path": "x", "game_id": "y", "game_path": "z"}
+
+    class StubResponse:
+        def __init__(self) -> None:
+            self.messages: list[str] = []
+
+        async def send_message(self, content: str, **kwargs: Any) -> None:
+            self.messages.append(content)
+
+        async def send_modal(self, modal: Any) -> None:
+            raise AssertionError("abort must not open NoGo modal")
+
+    class StubMessage:
+        def __init__(self) -> None:
+            self.edited_views: list[Any] = []
+
+        async def edit(self, **kwargs: Any) -> None:
+            self.edited_views.append(kwargs.get("view"))
+
+    class StubInteraction:
+        def __init__(self) -> None:
+            self.response = StubResponse()
+            self.message = StubMessage()
+            self.followup_messages: list[str] = []
+
+        class _Followup:
+            def __init__(self, parent: "StubInteraction") -> None:
+                self._parent = parent
+
+            async def send(self, content: str, **kwargs: Any) -> None:
+                self._parent.followup_messages.append(content)
+
+        @property
+        def followup(self) -> "_Followup":
+            return self._Followup(self)
+
+    pm_agent = StubPMAgent()
+    channel = StubChannel()
+    rerun_calls: list[tuple[Any, ...]] = []
+
+    async def rerun_meeting(*args: Any) -> None:
+        rerun_calls.append(args)
+
+    view = ProposalSelectView(
+        final_recommendation="提案概要",
+        final_category="カテゴリ",
+        revision_guidance="修正方針",
+        pm_agent=pm_agent,  # type: ignore[arg-type]
+        meeting_channel=channel,  # type: ignore[arg-type]
+        theme="theme",
+        rerun_meeting=rerun_meeting,
+        artifact_stem="abort_view_20260730_120000",
+        meeting_log_path=writer.path,
+        proposal_message_id="msg_001",
+    )
+
+    labels = [item.label for item in view.children if hasattr(item, "label")]
+    assert labels == ["Go", "NoGo", "中止"]
+
+    interaction = StubInteraction()
+    await view._finalize(interaction, "abort")  # type: ignore[arg-type]
+
+    assert all(getattr(item, "disabled", False) for item in view.children if hasattr(item, "disabled"))
+    assert interaction.message.edited_views
+    assert interaction.response.messages == ["中止しました。この企画会議は終了します。"]
+    assert pm_agent.generate_calls == 0
+    assert rerun_calls == []
+    assert interaction.followup_messages == []
+
+    decision_line = __import__("json").loads(writer.path.read_text(encoding="utf-8").splitlines()[-1])
+    assert decision_line["type"] == "decision"
+    assert "中止 ⏹" in decision_line["message"]

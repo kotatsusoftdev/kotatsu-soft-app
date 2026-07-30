@@ -130,6 +130,8 @@ def main() -> int:
     for item in updates:
         print(f"\n=== {item.role} / {item.name} ===")
         print(f"path: {item.path}")
+        print("speech:")
+        print(item.speech or "(empty)")
         print("before:")
         print(format_lesson_items(item.before))
         print("after:")

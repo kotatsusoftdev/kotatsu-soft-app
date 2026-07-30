@@ -52,9 +52,10 @@ flowchart LR
   order[Discord社長命令] --> choose{プロセス選択}
   choose -->|企画会議| themeModal[テーマ入力]
   themeModal --> meeting[企画会議]
-  meeting --> goNoGo{社長Go/NoGo}
+  meeting --> goNoGo{社長Go/NoGo/中止}
   goNoGo -->|NoGo| meeting
   goNoGo -->|Go| spec[仕様書生成]
+  goNoGo -->|中止| abortEnd[会議終了]
   spec --> impl[ゲーム実装]
   impl --> link[レジストリ紐づけ]
   link --> portal[ポータル反映]
@@ -68,7 +69,7 @@ flowchart LR
 | フェーズ | 概要 | 主な成果物 / 入口 |
 |----------|------|-------------------|
 | 企画会議 | 社長命令でプロセス選択 → テーマ入力 → 企画検討チャンネルで AI 社員が議論 | `shared/meeting/meeting_{stem}.jsonl` |
-| 社長判定 | Go / NoGo。NoGo は修正方針を入れて再会議 | — |
+| 社長判定 | Go / NoGo / 中止。NoGo は修正方針を入れて再会議。中止は仕様生成・再会議なしで終了 | — |
 | 仕様生成 | Go 後に仕様書を自動出力しレジストリへ登録 | `shared/specs/spec_{stem}.md`, `shared/specs/spec_game_links.json` |
 | 実装 | 外部エンジン禁止。単一 HTML を原則 | `game-projects/NNN_slug/src/index.html` |
 | 紐づけ・ポータル | 仕様とゲームを紐づけ、ポータルにカード追加 | レジストリ、`game-projects/index.html` |
@@ -109,14 +110,14 @@ flowchart LR
 1. Discord の社長命令チャンネル（`PRESIDENT_ORDER_CHANNEL_ID`）に何かメッセージを投稿する
 2. Bot が「企画会議 / 反省会」のプロセス選択を返す
 3. **企画会議** を選び、Modal にテーマを入力する
-4. Bot が企画検討チャンネル（`MEETING_CHANNEL_ID`）で会議を開始する（途中経過・最終提案・Go/NoGo も同チャンネル）
+4. Bot が企画検討チャンネル（`MEETING_CHANNEL_ID`）で会議を開始する（途中経過・最終提案・Go/NoGo/中止 も同チャンネル）
 
 チャンネル役割:
 
 | チャンネル | 役割 |
 |------------|------|
 | 社長命令（`PRESIDENT_ORDER_CHANNEL_ID`） | プロセス選択と開始入力（テーマ Modal）。短い誘導のみ |
-| 企画検討（`MEETING_CHANNEL_ID`） | 企画会議の途中経過・最終提案・Go/NoGo |
+| 企画検討（`MEETING_CHANNEL_ID`） | 企画会議の途中経過・最終提案・Go/NoGo/中止 |
 | 反省会（`POST_MORTEM_CHANNEL_ID`） | 反省会の確認 UI・実行中表示・教訓結果 |
 
 環境変数の置き方は [README.md](./README.md) を参照。
@@ -144,7 +145,7 @@ PM が `FINISH_FOR_PRESIDENT` を選ぶと社長判定へ進む。早期終了�
 
 ---
 
-## 5. 社長判定（Go / NoGo）
+## 5. 社長判定（Go / NoGo / 中止）
 
 会議終了後、社長（人間）が企画検討チャンネル上で判定する。
 
@@ -152,6 +153,7 @@ PM が `FINISH_FOR_PRESIDENT` を選ぶと社長判定へ進む。早期終了�
 |------|------|
 | **Go** | 採用プランの仕様書を自動生成し、`spec_game_links.json` に記録を追加する |
 | **NoGo** | 修正方針モーダルに入力 → 方針を最優先として再会議 |
+| **中止** | 仕様書生成・再会議なし。この企画会議を終了する |
 
 Go 直後のメッセージ例（運用上の目印）: 仕様書の自動出力・保存完了通知、および採番された `game_id` / 予定パス。
 
@@ -414,13 +416,14 @@ CLI・Discord からの起動手順は [README.md](./README.md) の「開発完�
 1. **プロセス変更時は本ファイルを先に更新する。** README はセットアップ・短い手順・本設計書へのリンクに留める。
 2. **個別仕様・レビューは `shared/` に置く。** 本ファイルへは一般化した規約・フェーズだけ反映する。
 3. **企画会議の共有制約は `shared/meeting/grand_rules.yaml` を正本とする。** 役割固有の評価軸は `ai-core/src/agents/*/config.yaml`。
-4. **用語はコードと揃える。** `artifact_stem` / `game_id` / `DIVERGENCE`・`CONFLICT`・`FINAL` / Go・NoGo / `FINISH_FOR_PRESIDENT` など。
+4. **用語はコードと揃える。** `artifact_stem` / `game_id` / `DIVERGENCE`・`CONFLICT`・`FINAL` / Go・NoGo・中止 / `FINISH_FOR_PRESIDENT` など。
 5. **改定したら下表に追記する。**
 
 ### 改定履歴
 
 | 日付 | 要約 |
 |------|------|
+| 2026-07-30 | 社長判定に「中止」を追加。Go/NoGo/中止の3択とし、中止は仕様生成・再会議なしで終了 |
 | 2026-07-30 | ログイン不要のローカルセーブ共通ヘルパー（`KotatsuStorage` / `storage.js`）を追加。matatabi_chaos にハイスコア配線 |
 | 2026-07-30 | 品質管理を追加。完成ゲーム HTML/JS 構文検知とポータル自動掲載連携テスト（CI・Pages デプロイ前ゲート） |
 | 2026-07-30 | 企画会議グランドルールを `shared/meeting/grand_rules.yaml` に正本化。PM/Dev/Marketing config から共有制約を分離 |

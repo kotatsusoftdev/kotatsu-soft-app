@@ -294,29 +294,30 @@ class DynamicOrchestrator:
         return consulted
 
     @staticmethod
-    def _history_line_mentions_role(line: str, role: str) -> bool:
-        role_markers = {
+    def _history_line_is_speech_by_role(line: str, role: str) -> bool:
+        """True only when the history line is an actual utterance by the role.
+
+        Mentions such as ``@スゴ杉くん(エンジニア)`` inside PM/other speech must
+        not count as that role having spoken (they break speaker rotation).
+        """
+        speech_prefixes = {
             "marketing": (
                 "ヂャイアン(マーケ):",
-                "@ヂャイアン(マーケ)",
                 "Gian_Agent:",
-                "@Gian_Agent",
                 "marketing:",
             ),
             "dev": (
                 "スゴ杉くん(エンジニア):",
-                "@スゴ杉くん(エンジニア)",
                 "Takasugi_Agent:",
-                "@Takasugi_Agent",
                 "dev:",
             ),
         }
-        return any(marker in line for marker in role_markers.get(role, ()))
+        return any(line.startswith(prefix) for prefix in speech_prefixes.get(role, ()))
 
     def _last_non_pm_role(self, history: list[str]) -> Optional[str]:
         for line in reversed(history):
             for role in self._NON_PM_AGENT_ORDER:
-                if self._history_line_mentions_role(line, role):
+                if self._history_line_is_speech_by_role(line, role):
                     return role
         return None
 
@@ -692,6 +693,14 @@ class ProposalSelectView(discord.ui.View):
         no_go_button.callback = self._make_callback("nogo")
         self.add_item(no_go_button)
 
+        abort_button = discord.ui.Button(
+            label="中止",
+            style=discord.ButtonStyle.secondary,
+            custom_id="president_abort",
+        )
+        abort_button.callback = self._make_callback("abort")
+        self.add_item(abort_button)
+
     def _disable_buttons(self) -> None:
         for item in self.children:
             if isinstance(item, discord.ui.Button):
@@ -739,6 +748,22 @@ class ProposalSelectView(discord.ui.View):
                 f"`{spec_path}`\n"
                 f"🎮 採番: `game_id={game_id}` / 予定パス `{game_path}`"
             )
+            return
+
+        if decision == "abort":
+            self._disable_buttons()
+            await interaction.message.edit(view=self)
+            await interaction.response.send_message(
+                "中止しました。この企画会議は終了します。",
+                ephemeral=False,
+            )
+            if chat_log is not None:
+                chat_log.log_decision(
+                    decision="abort",
+                    phase="FINAL",
+                    turn=10,
+                    reply_to=self.proposal_message_id,
+                )
             return
 
         if chat_log is not None:

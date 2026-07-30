@@ -100,14 +100,26 @@ class PMAgent(BaseAgent):
         has_explicit_two_options = "案A" in recent_text and "案B" in recent_text
         return has_explicit_two_options or (has_strong and has_decision)
 
+    @staticmethod
+    def _line_is_speech_by_role(line: str, role: str) -> bool:
+        """True only for actual utterances by the role (not @mentions in other speech)."""
+        speech_prefixes = {
+            "marketing": (
+                "ヂャイアン(マーケ):",
+                "Gian_Agent:",
+                "marketing:",
+            ),
+            "dev": (
+                "スゴ杉くん(エンジニア):",
+                "Takasugi_Agent:",
+                "dev:",
+            ),
+        }
+        return any(line.startswith(prefix) for prefix in speech_prefixes.get(role, ()))
+
     def _latest_marketing_message(self, history: list[str]) -> str:
         for line in reversed(history):
-            if (
-                "ヂャイアン(マーケ):" in line
-                or "@ヂャイアン(マーケ)" in line
-                or "Gian_Agent:" in line
-                or "@Gian_Agent" in line
-            ):
+            if self._line_is_speech_by_role(line, "marketing"):
                 return line
         return ""
 
@@ -169,19 +181,9 @@ class PMAgent(BaseAgent):
         base_instruction = self.build_system_instruction()
 
         consulted_marketing = any(
-            "ヂャイアン(マーケ):" in line
-            or "@ヂャイアン(マーケ)" in line
-            or "Gian_Agent:" in line
-            or "@Gian_Agent" in line
-            for line in history
+            self._line_is_speech_by_role(line, "marketing") for line in history
         )
-        consulted_dev = any(
-            "スゴ杉くん(エンジニア):" in line
-            or "@スゴ杉くん(エンジニア)" in line
-            or "Takasugi_Agent:" in line
-            or "@Takasugi_Agent" in line
-            for line in history
-        )
+        consulted_dev = any(self._line_is_speech_by_role(line, "dev") for line in history)
         phase_label = self._phase_label(current_turn, max_turns)
         phase_instruction = self._phase_instruction(current_turn, max_turns)
         remaining_turns = max(max_turns - current_turn + 1, 0)

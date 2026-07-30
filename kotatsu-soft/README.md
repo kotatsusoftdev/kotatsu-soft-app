@@ -160,5 +160,5 @@ cd kotatsu-soft/ai-core
 5. 同チャンネルに各 AI 社員（すずかちゃん / スゴ杉くん / ヂャイアン）名義で教訓 before/after が投稿される
 
 ※ `artifact_stem` の手入力は不要です（`spec_game_links.json` の直近リンクから自動解決）。
-※ 企画会議も社長命令チャンネルから選べます。テーマは Modal で入力し、途中経過・Go/NoGo は企画検討チャンネル（`MEETING_CHANNEL_ID`）に出ます。
+※ 企画会議も社長命令チャンネルから選べます。テーマは Modal で入力し、途中経過・Go/NoGo/中止は企画検討チャンネル（`MEETING_CHANNEL_ID`）に出ます。
 ※ 社長命令チャンネルはプロセス選択専用です。経過・結果は各プロセスのチャンネルに出ます。

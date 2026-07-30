@@ -78,6 +78,38 @@ def test_normalize_lesson_items_parses_numbered_list() -> None:
     ]
 
 
+def test_parse_evolution_response_splits_speech_and_lessons() -> None:
+    from post_mortem import parse_evolution_response
+
+    raw = (
+        "【発表文】\n"
+        "着地判定がずれていたから、次の教訓を得たよ。\n"
+        "1. 判定ははっきり書く。\n\n"
+        "【教訓】\n"
+        "1. 判定ルールはわかりやすく決める。\n"
+        "2. 仕様とコードをそろえる。\n"
+        "3. テストで確認する。"
+    )
+    speech, items = parse_evolution_response(raw)
+    assert "着地判定がずれていた" in speech
+    assert items == [
+        "判定ルールはわかりやすく決める。",
+        "仕様とコードをそろえる。",
+        "テストで確認する。",
+    ]
+
+
+def test_parse_evolution_response_legacy_lessons_only() -> None:
+    from post_mortem import parse_evolution_response
+
+    speech, items = parse_evolution_response(
+        "1. 一つ目。\n2. 二つ目。\n3. 三つ目。"
+    )
+    assert items == ["一つ目。", "二つ目。", "三つ目。"]
+    assert "次の教訓を得たよ" in speech
+    assert "一つ目。" in speech
+
+
 def test_prompt_prioritizes_review() -> None:
     from post_mortem import PostMortemInputs
 
@@ -92,14 +124,38 @@ def test_prompt_prioritizes_review() -> None:
     )
     prompt = build_evolution_prompt(
         role="dev",
-        profile={"name": "スゴ杉", "title": "エンジニア", "primary_focus": "実現性"},
+        profile={
+            "name": "スゴ杉",
+            "title": "エンジニア",
+            "primary_focus": "実現性",
+            "tone": "落ち着いた優等生の口調",
+            "mindset": "あわてず順番に整理する",
+        },
         current_lessons=["旧1", "旧2", "旧3"],
         inputs=inputs,
     )
     assert prompt.index("【最重要: レビュー指摘・修正】") < prompt.index("【仕様書")
     assert "言い換えるだけは禁止" in prompt
+    assert "中学生でもわかる" in prompt
+    assert "【発表文】" in prompt
+    assert "【教訓】" in prompt
+    assert "落ち着いた優等生の口調" in prompt
     assert "旧1" in prompt
     assert format_lesson_items(["旧1", "旧2", "旧3"]) in prompt
+
+
+def _fake_evolution_response(role: str) -> str:
+    return (
+        f"【発表文】\n"
+        f"{role}として、判定のズレがあったから次の教訓を得たよ。\n"
+        f"1. {role}の進化教訓1。\n"
+        f"2. {role}の進化教訓2。\n"
+        f"3. {role}の進化教訓3。\n\n"
+        f"【教訓】\n"
+        f"1. {role}の進化教訓1。\n"
+        f"2. {role}の進化教訓2。\n"
+        f"3. {role}の進化教訓3。"
+    )
 
 
 def test_collect_inputs_and_run_post_mortem(tmp_path: Path, monkeypatch) -> None:
@@ -168,11 +224,7 @@ def test_collect_inputs_and_run_post_mortem(tmp_path: Path, monkeypatch) -> None
     assert "demo game" in inputs.game_source
 
     def fake_llm(*, role: str, prompt: str, model: str, temperature: float) -> str:
-        return (
-            f"1. {role}の進化教訓1。\n"
-            f"2. {role}の進化教訓2。\n"
-            f"3. {role}の進化教訓3。"
-        )
+        return _fake_evolution_response(role)
 
     updates, warnings = run_post_mortem(
         artifact_stem=stem,
@@ -184,6 +236,8 @@ def test_collect_inputs_and_run_post_mortem(tmp_path: Path, monkeypatch) -> None
     assert not any("not found" in w for w in warnings)
     assert len(updates) == 3
     assert updates[0].after == ["pmの進化教訓1。", "pmの進化教訓2。", "pmの進化教訓3。"]
+    assert "判定のズレがあった" in updates[0].speech
+    assert "pmの進化教訓1。" in updates[0].speech
 
     saved = load_lessons(agents_root, "pm")
     assert saved["lesson_items"][0] == "pmの進化教訓1。"
@@ -223,9 +277,13 @@ def test_dry_run_does_not_write(tmp_path: Path, monkeypatch) -> None:
         agents_root=agents_root,
         repo=tmp_path,
         dry_run=True,
-        llm_callable=lambda **kwargs: "1. dry1\n2. dry2\n3. dry3",
+        llm_callable=lambda **kwargs: (
+            "【発表文】\n判定がずれていたから、次の教訓を得た。\n"
+            "【教訓】\n1. dry1\n2. dry2\n3. dry3"
+        ),
     )
     assert updates[0].after == ["dry1", "dry2", "dry3"]
+    assert "判定がずれていた" in updates[0].speech
     assert load_lessons(agents_root, "pm")["lesson_items"] == before
 
 

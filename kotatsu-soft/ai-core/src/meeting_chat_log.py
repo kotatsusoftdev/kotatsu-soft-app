@@ -252,11 +252,20 @@ class MeetingChatLogWriter:
         )
 
     def log_decision(self, *, decision: str, phase: str = "FINAL", turn: int, reply_to: Optional[str] = None) -> str:
-        label = "Go ✅" if decision.lower() == "go" else "NoGo ❌"
-        message = f"{label}\nこの案で進めて！" if decision.lower() == "go" else f"{label}\n修正方針を反映して再検討します。"
+        key = decision.lower()
+        if key == "go":
+            label = "Go ✅"
+            body = "この案で進めて！"
+        elif key == "abort":
+            label = "中止 ⏹"
+            body = "この企画会議を終了します。"
+        else:
+            label = "NoGo ❌"
+            body = "修正方針を反映して再検討します。"
+        message = f"{label}\n{body}"
         self.append(
             role="system",
-            message="Go / NoGo 判定",
+            message="Go / NoGo / 中止 判定",
             msg_type="system",
             phase=phase,
             turn=turn,

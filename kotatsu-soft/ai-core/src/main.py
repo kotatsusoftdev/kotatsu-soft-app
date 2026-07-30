@@ -267,11 +267,11 @@ def format_post_mortem_system_messages(warnings: list[str]) -> list[str]:
 
 
 def format_post_mortem_agent_message(item: LessonUpdate) -> str:
+    speech = (item.speech or "").strip()
+    if speech:
+        return speech
     return (
-        "今回の反省会で、自分の教訓をこう更新したよ。\n\n"
-        "**before**\n"
-        f"{format_lesson_items(item.before)}\n\n"
-        "**after**\n"
+        "今回の反省会で、次の教訓を得たよ。\n\n"
         f"{format_lesson_items(item.after)}"
     )
 

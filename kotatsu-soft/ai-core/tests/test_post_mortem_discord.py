@@ -136,10 +136,26 @@ def test_build_and_format_post_mortem_messages() -> None:
         before=["旧1", "旧2", "旧3"],
         after=["新1", "新2", "新3"],
         path=Path("agents/pm/lessons_learned.yaml"),
+        speech="着地判定がずれていたから、次の教訓を得たよ。\n1. 新1\n2. 新2\n3. 新3",
     )
     agent_message = main.format_post_mortem_agent_message(update)
+    assert "着地判定がずれていた" in agent_message
     assert "新1" in agent_message
-    assert "旧1" in agent_message
+    assert "before" not in agent_message
+    assert "after" not in agent_message
+
+    fallback = main.format_post_mortem_agent_message(
+        LessonUpdate(
+            role="pm",
+            name="すずかちゃん(PM)",
+            before=["旧1"],
+            after=["新A", "新B", "新C"],
+            path=Path("agents/pm/lessons_learned.yaml"),
+            speech="",
+        )
+    )
+    assert "次の教訓を得たよ" in fallback
+    assert "新A" in fallback
 
 
 @pytest.mark.asyncio
@@ -166,6 +182,7 @@ async def test_publish_post_mortem_results_posts_as_each_agent(
             before=["旧PM"],
             after=["新PM"],
             path=Path("agents/pm/lessons_learned.yaml"),
+            speech="判定のズレがあったから、次の教訓を得たの。新PMだよ。",
         ),
         LessonUpdate(
             role="dev",
@@ -173,6 +190,7 @@ async def test_publish_post_mortem_results_posts_as_each_agent(
             before=["旧Dev"],
             after=["新Dev"],
             path=Path("agents/dev/lessons_learned.yaml"),
+            speech="実装のずれがあったため、次の教訓を得ました。新Devです。",
         ),
         LessonUpdate(
             role="marketing",
@@ -180,6 +198,7 @@ async def test_publish_post_mortem_results_posts_as_each_agent(
             before=["旧Mkt"],
             after=["新Mkt"],
             path=Path("agents/marketing/lessons_learned.yaml"),
+            speech="見た目がしょぼかったから、オレは次の教訓を得たぜ！新Mktだ！",
         ),
     ]
 
@@ -189,7 +208,10 @@ async def test_publish_post_mortem_results_posts_as_each_agent(
     assert posted[1]["username"] == "すずかちゃん(PM)"
     assert posted[2]["username"] == "スゴ杉くん(エンジニア)"
     assert posted[3]["username"] == "ヂャイアン(マーケ)"
+    assert "判定のズレがあった" in posted[1]["content"]
     assert "新PM" in posted[1]["content"]
+    assert "実装のずれがあった" in posted[2]["content"]
+    assert "オレは次の教訓を得たぜ" in posted[3]["content"]
     assert posted[1]["avatar_url"] == main._AGENT_AVATAR_URLS["pm"]
     assert posted[2]["avatar_url"] == main._AGENT_AVATAR_URLS["dev"]
     assert posted[3]["avatar_url"] == main._AGENT_AVATAR_URLS["marketing"]
