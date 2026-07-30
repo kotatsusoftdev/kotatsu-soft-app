@@ -139,7 +139,7 @@ PM が `FINISH_FOR_PRESIDENT` を選ぶと社長判定へ進む。早期終了�
 | **Go** | 採用プランの仕様書を自動生成し、`spec_game_links.json` に記録を追加する |
 | **NoGo** | 修正方針モーダルに入力 → 方針を最優先として再会議 |
 
-Go 直後のメッセージ例（運用上の目印）: 仕様書の自動出力・保存完了通知。
+Go 直後のメッセージ例（運用上の目印）: 仕様書の自動出力・保存完了通知、および採番された `game_id` / 予定パス。
 
 ---
 
@@ -154,11 +154,13 @@ Go 直後のメッセージ例（運用上の目印）: 仕様書の自動出力
 
 ### 6.2 レジストリの役割
 
-`spec_game_links.json` は仕様・会議ログ・（後から紐づく）ゲーム本体を `artifact_stem` / `game_id` で結ぶ。
+`spec_game_links.json` は仕様・会議ログ・ゲーム本体を `artifact_stem` / `game_id` で結ぶ。
+
+社長 **Go** で仕様書を生成すると、`ai-core` が **`game_id` と予定ディレクトリ番号（`NNN`）を自動採番**し、`linked_games` に仮登録する（ディレクトリ stub は作らない）。実装時はこの予約値を転記する。
 
 ポータル（`game-projects/index.html`）はレジストリを読み、`data-game-id` ごとに最新の仕様書・会議ログリンクを表示する。
 
-紐づけの手動更新手順は [README.md](./README.md) の「仕様書とゲームの紐づけ管理」を参照。
+紐づけの手動更新（例外時の再リンク）は [README.md](./README.md) の「仕様書とゲームの紐づけ管理」を参照。
 
 ---
 
@@ -179,7 +181,7 @@ game-projects/
 ├── index.html                 # ポータル
 ├── assets/                    # サムネ等
 ├── common/
-│   └── stats.js               # プレイ数送信
+│   └── stats.js               # ポータル／ゲーム共用の計測クライアント
 └── {NNN}_{slug}/
     └── src/
         └── index.html         # ゲーム本体
@@ -187,13 +189,22 @@ game-projects/
 
 ### 7.3 統計連携
 
+ポータル・ゲームとも `common/stats.js`（`window.KotatsuStats`）を使う。Workers URL はモジュール内で一本化する。
+
+| API | 用途 |
+|-----|------|
+| `KotatsuStats.sendPlayCount(gameId)` | ゲームプレイ増分 |
+| `KotatsuStats.sendPortalPv()` | ポータル PV 増分（内部キー `pv`） |
+| `KotatsuStats.fetchStats()` | 集計取得 |
+| `KotatsuStats.formatCount` / `normalizeCount` | 表示用 |
+
 ゲームから `../../common/stats.js` を読み込み、プレイ開始時などに次を呼ぶ。
 
 ```javascript
 KotatsuStats.sendPlayCount("your_game_id");
 ```
 
-引数の `game_id` はディレクトリのスラッグおよびポータルの `data-game-id` と一致させる。
+引数の `game_id` は仕様作成時に採番されたスラッグ、ディレクトリ名のスラッグ、ポータルの `data-game-id` / `data-stat-id` と **すべて一致**させる。短名別名は禁止。予約キー `pv` はポータル PV 専用でゲーム ID に使わない。
 
 ---
 
@@ -203,13 +214,22 @@ KotatsuStats.sendPlayCount("your_game_id");
 |------|------|-----|
 | ゲームディレクトリ | `{3桁連番}_{snake_case_slug}` | `001_matatabi_chaos` |
 | エントリ | `.../src/index.html` | `game-projects/001_matatabi_chaos/src/index.html` |
-| `game_id` | スラッグ部分 | `matatabi_chaos` |
+| `game_id` | スラッグ部分（英小文字 snake_case） | `matatabi_chaos` |
+| 採番タイミング | 社長 Go → 仕様書作成時に自動 | `ai-core/src/game_id_allocator.py` |
 | `artifact_stem` | `{テーマスラッグ}_{YYYYMMDD_HHMMSS}` | `テトリスと猫を掛け合わせたゲームを作って_20260725_124622` |
 | 仕様 | `shared/specs/spec_{stem}.md` | |
 | 会議ログ | `shared/meeting/meeting_{stem}.jsonl` | |
 | レビュー | `shared/review/review_{stem}.md` | |
-| ポータル属性 | `data-game-id="{game_id}"` | |
-| サムネ | `game-projects/assets/{NNN}_{slug}.png` 等 | |
+| ポータル属性 | `data-game-id` / `data-stat-id` = `{game_id}` | 両者は同一必須（`data-stat-id` は省略可） |
+| サムネ | `game-projects/assets/{NNN}_{slug}.png` | |
+| 統計予約キー | `pv`（ポータル PV） | ゲーム ID に使わない |
+
+`game_id` の採番:
+
+1. 仕様書に LLM が `- game_id: english_snake_case` を出力（検証・衝突時は `_2` 等）
+2. `NNN` は `game-projects/` ディレクトリとレジストリ `game_path` の最大番号 + 1
+3. 抽出失敗時は `game_{NNN}`（例: `game_002`）
+4. 一度採番したら変更しない
 
 `artifact_stem` の生成・パス解決は `ai-core/src/artifact_naming.py` が正。
 
@@ -221,7 +241,9 @@ KotatsuStats.sendPlayCount("your_game_id");
 
 ### 9.1 仕様↔ゲーム紐づけ
 
-実装後、未紐づけならスクリプトで登録する。
+Go 時点で `linked_games` に `game_id` / 予定 `game_path` が仮登録される。実装ではその値でディレクトリを作成する。
+
+タイトル更新やパス修正が必要なときだけ、手動スクリプトで再リンクする。
 
 ```bash
 cd kotatsu-soft/ai-core
@@ -232,14 +254,12 @@ python scripts/link_spec_to_game.py \
   --game-title "タイトル"
 ```
 
-Go 時点では仕様レコードのみレジストリに入り、`linked_games` は実装後に埋まる運用が一般的。
-
 ### 9.2 ポータル更新チェックリスト
 
-1. `game-projects/{NNN}_{slug}/src/index.html` を追加する
-2. `game-projects/index.html` にカードを追加し、`data-game-id` を揃える
-3. `game-projects/assets/` にサムネを置く
-4. 仕様紐づけを完了する（上記スクリプトまたは同等のレジストリ更新）
+1. レジストリの予約 `game_id` / `game_path` を確認する
+2. `game-projects/{NNN}_{slug}/src/index.html` を実装する（予約どおりのディレクトリ名）
+3. `game-projects/index.html` にカードを追加し、`data-game-id` / `data-stat-id` / `sendPlayCount` を同一 `game_id` にする
+4. `game-projects/assets/{NNN}_{slug}.png` にサムネを置く
 5. 仕様・会議リンクがポータルから辿れることを確認する
 
 ---
@@ -318,11 +338,11 @@ CLI・Discord からの起動手順は [README.md](./README.md) の「開発完�
 
 - [ ] Discord の社長命令チャンネルから企画会議を開始し、完走する
 - [ ] 社長が **Go** する（NoGo なら修正方針を入れて再会議）
-- [ ] `shared/specs/spec_{stem}.md` とレジストリ登録を確認する
-- [ ] `game-projects/{NNN}_{slug}/src/index.html` を実装する（単一 HTML・外部エンジンなし）
-- [ ] `KotatsuStats.sendPlayCount("{slug}")` を入れる
-- [ ] ポータルにカード・サムネ・`data-game-id` を追加する
-- [ ] `link_spec_to_game.py` 等で仕様とゲームを紐づける
+- [ ] 仕様書・レジストリ・Discord 通知の **自動採番 `game_id` / 予定パス** を確認する
+- [ ] 予約どおりの `game-projects/{NNN}_{slug}/src/index.html` を実装する（単一 HTML・外部エンジンなし）
+- [ ] `KotatsuStats.sendPlayCount("{game_id}")` を入れる（予約 ID と一致）
+- [ ] ポータルにカード・サムネ・`data-game-id` / `data-stat-id` を追加する（同一 ID）
+- [ ] （必要なときだけ）`link_spec_to_game.py` でタイトルやパスを更新する
 - [ ] `main` に push し、Pages 反映を確認する
 - [ ] `shared/review/review_{stem}.md` にプレイテスト結果を残す
 - [ ] 反省会（CLI または Discord）で教訓を更新する
@@ -340,6 +360,7 @@ CLI・Discord からの起動手順は [README.md](./README.md) の「開発完�
 
 | 日付 | 要約 |
 |------|------|
+| 2026-07-30 | 仕様作成時の game_id 自動採番。stats.js 一本化。ID 一致規約を明文化 |
 | 2026-07-30 | チャンネル役割分離。社長命令は選択のみ、経過・結果は企画検討／反省会チャンネルへ |
 | 2026-07-30 | 社長命令チャンネルへ入口を統一。プロセス選択（企画会議／反省会）とテーマ Modal を追加。旧称「無茶ぶり」を廃止 |
 | 2026-07-30 | 初版。企画会議〜反省会までの全体プロセスを文書化 |

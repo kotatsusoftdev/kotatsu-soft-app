@@ -350,18 +350,18 @@
       font-size: 1.05rem;
     }
 
-    .thumb.matatabi {
+    .thumb.matatabi_chaos {
       color: transparent;
       text-shadow: none;
       font-size: 0;
       background-color: #7cb342;
     }
 
-    .thumb.matatabi::before {
+    .thumb.matatabi_chaos::before {
       content: "";
       position: absolute;
       inset: 0;
-      background-image: url("./assets/matatabi_thumb.png");
+      background-image: url("./assets/001_matatabi_chaos.png");
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
@@ -369,8 +369,8 @@
       will-change: transform;
     }
 
-    .game-card:hover .thumb.matatabi::before,
-    .game-card:focus-within .thumb.matatabi::before {
+    .game-card:hover .thumb.matatabi_chaos::before,
+    .game-card:focus-within .thumb.matatabi_chaos::before {
       transform: scale(1.05);
     }
 
@@ -811,13 +811,13 @@
             href="./001_matatabi_chaos/src/index.html"
             data-game-id="matatabi_chaos"
           >マタタビ大合唱を遊ぶ</a>
-          <div class="thumb matatabi" aria-hidden="true"></div>
+          <div class="thumb matatabi_chaos" aria-hidden="true"></div>
           <h3>マタタビ大合唱 ～モフモフ・カオス・タワー～</h3>
           <p>クリックでマタタビを置いて猫を誘導し、天高く積み上げろ！残り時間10秒でニャーニャー大合唱ボーナスタイム！</p>
           <div class="card-footer">
             <div class="actions">
               <span class="pill">Chaos Puzzle</span>
-              <span class="pill play-count play-count-matatabi" data-stat-id="matatabi_chaos" aria-live="polite">🎮 -回プレイ</span>
+              <span class="pill play-count play-count-matatabi_chaos" data-stat-id="matatabi_chaos" aria-live="polite">🎮 -回プレイ</span>
             </div>
             <div class="card-actions-group">
               <a class="action-btn play" data-game-id="matatabi_chaos" href="./001_matatabi_chaos/src/index.html">今すぐ遊ぶ (Play)</a>
@@ -858,8 +858,9 @@
     </footer>
   </div>
 
+  <script src="./common/stats.js"></script>
   <script>
-    const API_BASE_URL = "https://kotatsu-soft-stats.kotatsusoft-dev.workers.dev";
+    const { formatCount, normalizeCount, fetchStats, sendPortalPv } = window.KotatsuStats;
 
     const totalPlayEl = document.getElementById("totalPlayCount");
     const portalPvEl = document.querySelector(".global-pv");
@@ -886,18 +887,6 @@
       return `${resolveSharedRoot()}/specs/spec_game_links.json`;
     }
 
-    function formatCount(value) {
-      const num = Number(value);
-      if (!Number.isFinite(num)) return null;
-      return new Intl.NumberFormat("ja-JP").format(Math.max(0, Math.trunc(num)));
-    }
-
-    function normalizeCount(value) {
-      const num = Number(value);
-      if (!Number.isFinite(num)) return null;
-      return Math.max(0, Math.trunc(num));
-    }
-
     function setGlobalPv(value) {
       const count = normalizeCount(value);
       if (!portalPvEl || count === null) return;
@@ -919,34 +908,6 @@
     function getBadgeStatId(el) {
       if (!el) return null;
       return el.dataset.statId || el.dataset.gameId || null;
-    }
-
-    async function postCount(id) {
-      try {
-        await fetch(`${API_BASE_URL}?id=${encodeURIComponent(id)}`, {
-          method: "POST",
-          keepalive: true,
-          cache: "no-store",
-        });
-      } catch (_error) {
-        // Keep existing display as fallback when API is unavailable.
-      }
-    }
-
-    async function fetchStats() {
-      try {
-        const response = await fetch(API_BASE_URL, {
-          method: "GET",
-          cache: "no-store",
-          headers: {
-            accept: "application/json",
-          },
-        });
-        if (!response.ok) return null;
-        return response.json();
-      } catch (_error) {
-        return null;
-      }
     }
 
     async function fetchSpecRegistry() {
@@ -1099,7 +1060,7 @@
     async function bootstrapPortal() {
       syncStaticSpecLinks();
       // Requirement order: increment PV first, then fetch latest counters.
-      await postCount("pv");
+      await sendPortalPv();
       const [stats, specRegistry] = await Promise.all([
         fetchStats(),
         fetchSpecRegistry(),

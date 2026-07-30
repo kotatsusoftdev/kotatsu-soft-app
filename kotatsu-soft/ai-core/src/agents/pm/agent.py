@@ -8,6 +8,12 @@ from google.genai import types
 from agents.base_agent import BaseAgent
 from agents.pm.schemas import PMDecision
 from artifact_naming import spec_path as build_spec_path
+from game_id_allocator import (
+    allocate_game_identity,
+    ensure_game_id_header,
+    extract_game_id_from_spec,
+    extract_game_title_from_spec,
+)
 from phase_labels import phase_display_ja
 from spec_link_registry import register_generated_spec
 
@@ -418,11 +424,13 @@ class PMAgent(BaseAgent):
         proposal_summary: str,
         theme: Optional[str] = None,
         artifact_stem: Optional[str] = None,
-    ) -> Path:
+    ) -> dict:
         instruction = (
             "あなたはPMエージェントです。採用された案の概要を受け取り、"
             "Discord上で提示した最終提案を元にMarkdown形式の詳細仕様書を作成してください。"
-            "仕様書には【ゲームタイトル】【概要】【コア体験/ゲーム性】【操作方法】【開発手順（エンジニアAIへの指示用）】を含めてください。"
+            "仕様書の先頭付近に必ず次の1行を含めてください: `- game_id: english_snake_case` "
+            "（英小文字・数字・アンダースコアのみ。ディレクトリ番号は含めない。例: matatabi_chaos）。"
+            "続けて【ゲームタイトル】【概要】【コア体験/ゲーム性】【操作方法】【開発手順（エンジニアAIへの指示用）】を含めてください。"
         )
         prompt_text = (
             f"採用された案: {selected_plan}\n"
@@ -445,6 +453,15 @@ class PMAgent(BaseAgent):
 
         spec_text = self.extract_text_from_response(response).strip()
         repo_root = Path(__file__).resolve().parents[4]
+        preferred_game_id = extract_game_id_from_spec(spec_text)
+        game_title = extract_game_title_from_spec(spec_text)
+        identity = allocate_game_identity(
+            preferred_game_id=preferred_game_id,
+            game_title=game_title,
+            repo_root=repo_root,
+        )
+        spec_text = ensure_game_id_header(spec_text, identity.game_id)
+
         if artifact_stem:
             spec_file = build_spec_path(repo_root, artifact_stem)
             spec_file.parent.mkdir(parents=True, exist_ok=True)
@@ -464,5 +481,14 @@ class PMAgent(BaseAgent):
             proposal_summary=proposal_summary,
             theme=theme,
             artifact_stem=artifact_stem,
+            game_id=identity.game_id,
+            game_path=identity.game_path,
+            game_title=identity.game_title,
         )
-        return spec_file
+        return {
+            "spec_path": spec_file,
+            "game_id": identity.game_id,
+            "game_path": identity.game_path,
+            "game_dir": identity.game_dir,
+            "game_title": identity.game_title,
+        }

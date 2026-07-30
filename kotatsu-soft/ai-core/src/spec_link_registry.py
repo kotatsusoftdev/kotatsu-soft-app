@@ -79,6 +79,9 @@ def register_generated_spec(
     proposal_summary: str,
     theme: Optional[str] = None,
     artifact_stem: Optional[str] = None,
+    game_id: Optional[str] = None,
+    game_path: Optional[str] = None,
+    game_title: Optional[str] = None,
 ) -> dict[str, Any]:
     payload = load_registry()
     records = [record for record in payload.get("records", []) if isinstance(record, dict)]
@@ -108,6 +111,16 @@ def register_generated_spec(
         if isinstance(preserved_links, list):
             new_record["linked_games"] = preserved_links
         records[existing_index] = new_record
+
+    if game_id and game_path and not new_record["linked_games"]:
+        new_record["linked_games"] = [
+            {
+                "game_id": game_id,
+                "game_path": game_path,
+                "game_title": game_title or "",
+                "linked_at": created_at,
+            }
+        ]
 
     payload["records"] = records
     save_registry(payload)

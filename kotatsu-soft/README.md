@@ -81,16 +81,16 @@ python src/main.py
 
 ## 仕様書とゲームの紐づけ管理
 
-ai-core が Go 判定後に仕様書を生成すると、`shared/specs/spec_game_links.json` に自動登録されます。
+ai-core が Go 判定後に仕様書を生成すると、`shared/specs/spec_game_links.json` に自動登録し、**`game_id` と予定パスを自動採番**して `linked_games` に仮登録します。
 
-- 仕様書生成: `shared/specs/spec_*.md` を出力
-- レジストリ更新: `shared/specs/spec_game_links.json` に記録追加
+- 仕様書生成: `shared/specs/spec_*.md` を出力（先頭に `- game_id: ...`）
+- レジストリ更新: `shared/specs/spec_game_links.json` に記録追加＋仮リンク
 - ポータル反映: `game-projects/index.html` はレジストリを読み、`data-game-id` ごとに最新仕様書リンクを表示
+- 統計キー: ポータルの `data-stat-id` / ゲームの `sendPlayCount` も同じ `game_id` を使う
 
 ### 紐づけを更新する手順
 
-1. 仕様書を生成（Discord の Go）
-2. 必要なら手動でゲームIDへ紐づけ
+通常は Go 時の自動採番で足ります。タイトルやパスの修正が必要なときだけ手動で更新します。
 
 ```bash
 cd kotatsu-soft/ai-core

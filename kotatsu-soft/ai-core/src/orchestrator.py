@@ -725,14 +725,19 @@ class ProposalSelectView(discord.ui.View):
                     reply_to=self.proposal_message_id,
                 )
 
-            spec_path = await self.pm_agent.generate_spec_for_plan(
+            result = await self.pm_agent.generate_spec_for_plan(
                 selected_plan=plan_label,
                 proposal_summary=self.final_recommendation,
                 theme=self.theme,
                 artifact_stem=self.artifact_stem,
             )
+            spec_path = result["spec_path"]
+            game_id = result["game_id"]
+            game_path = result["game_path"]
             await interaction.followup.send(
-                f"📄 仕様書を出力・保存しました: `{spec_path}`"
+                "📄 仕様書を出力・保存しました: "
+                f"`{spec_path}`\n"
+                f"🎮 採番: `game_id={game_id}` / 予定パス `{game_path}`"
             )
             return
 
