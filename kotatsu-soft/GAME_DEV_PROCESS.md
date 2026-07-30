@@ -27,18 +27,18 @@ KOTATSU-SOFT 全体のブラウザゲーム開発プロセスの正本です。�
 
 ```
 kotatsu-soft/
-├── ai-core/           # Discord Bot・会議・仕様生成・反省会
-├── game-projects/     # ポータル + 各ゲーム（静的 HTML）
-├── shared/            # 仕様・会議ログ・レビュー・レジストリ
+├── ai-core/           # Discord Bot・会議・仕様生成・反省会・アバター資産
+├── game-projects/     # ポータル・社員紹介・各ゲーム（静的 HTML）
+├── shared/            # 仕様・会議ログ・レビュー・レジストリ・運用ログ
 ├── README.md
 └── GAME_DEV_PROCESS.md  # 本設計書
 ```
 
 | コンポーネント | 役割 |
 |----------------|------|
-| `ai-core/` | Discord Bot。企画会議のオーケストレーション、Go 後の仕様書生成、反省会による教訓更新 |
-| `game-projects/` | 公式ポータル（`index.html`）と各ゲーム本体。ビルドなしの静的配信 |
-| `shared/` | 仕様書・会議ログ・プレイテストレビュー・仕様↔ゲーム紐づけレジストリ |
+| `ai-core/` | Discord Bot。企画会議のオーケストレーション、Go 後の仕様書生成、反省会による教訓更新。アバターは `ai-core/assets/avatars/` |
+| `game-projects/` | 公式ポータル（`index.html`）、社員紹介（`staff.html`）、各ゲーム本体。ビルドなしの静的配信 |
+| `shared/` | 仕様書・会議ログ・プレイテストレビュー・仕様↔ゲーム紐づけレジストリ・Bot 運用ログ（`logs/`） |
 | GitHub Pages | `main` への push で `game-projects` と共有成果物の一部を公開（リポジトリルートの `.github/workflows/game-pages-deploy.yml`） |
 
 Bot 起動・依存関係・環境変数は [README.md](./README.md) の「ai-core セットアップ」を参照。
@@ -69,13 +69,15 @@ flowchart LR
 | フェーズ | 概要 | 主な成果物 / 入口 |
 |----------|------|-------------------|
 | 企画会議 | 社長命令でプロセス選択 → テーマ入力 → 企画検討チャンネルで AI 社員が議論 | `shared/meeting/meeting_{stem}.jsonl` |
-| 社長判定 | Go / NoGo / 中止。NoGo は修正方針を入れて再会議。中止は仕様生成・再会議なしで終了 | — |
+| 社長判定 | Go / NoGo / 中止。NoGo は修正方針を入れて再会議（新 `artifact_stem`）。中止は仕様生成・再会議なしで終了 | — |
 | 仕様生成 | Go 後に仕様書を自動出力しレジストリへ登録 | `shared/specs/spec_{stem}.md`, `shared/specs/spec_game_links.json` |
 | 実装 | 外部エンジン禁止。単一 HTML を原則 | `game-projects/NNN_slug/src/index.html` |
 | 紐づけ・ポータル | 仕様とゲームを紐づけ、ポータルにカード追加 | レジストリ、`game-projects/index.html` |
 | 公開 | `main` push で Pages 自動デプロイ | 公開 URL |
 | プレイテスト | 指摘と修正履歴をレビューに記録 | `shared/review/review_{stem}.md` |
 | 反省会 | 成果物から教訓を更新し、次回会議へ反映 | `ai-core/src/agents/*/lessons_learned.yaml` |
+
+NoGo 再会議は毎回新しい `artifact_stem` を発行する。Go した stem だけが仕様・レジストリ・レビュー・反省会の正本になる（§5 / §8）。
 
 ---
 
@@ -89,14 +91,15 @@ flowchart LR
 | スゴ杉くん | `dev` | 技術的実現性、難所の見極め、面白さが伝わる実装の落とし所 |
 | ヂャイアン | `marketing` | 初見インパクト・拡散のフック、制約を武器にした見せ方 |
 
-設定の詳細は `ai-core/src/agents/*/config.yaml`。共有のスコープ・技術制約は §4.2 のグランドルールが正本。
+設定の詳細は `ai-core/src/agents/*/config.yaml`（社員紹介用の `public_profile` 含む）。共有のスコープ・技術制約は §4.2 のグランドルールが正本。
 
 ### 4.2 グランドルール
 
 企画会議で全 AI 社員が共有する制約の正本は次のファイル。
 
 - パス: `shared/meeting/grand_rules.yaml`
-- 注入: `ai-core` が各エージェントの system instruction に `【企画会議グランドルール】` として自動挿入する
+- 読込: `ai-core/src/grand_rules_store.py`
+- 注入: 各エージェントの system instruction に `【企画会議グランドルール】` として自動挿入する
 - 責務分界: スコープ上限・技術スタック・工数の扱いなどの**共有制約**は本 YAML。役割固有の判断軸・口調は各 `config.yaml`
 
 改定手順:
@@ -132,7 +135,7 @@ flowchart LR
 | 6–7 | `CONFLICT` | 衝突 | トレードオフを突き合わせる |
 | 8–10 | `FINAL` | 収束 | 1案に絞り、社長提出へ |
 
-PM が `FINISH_FOR_PRESIDENT` を選ぶと社長判定へ進む。早期終了のガードやターン上限時の強制提出はオーケストレータが制御する。
+PM が `FINISH_FOR_PRESIDENT` を選ぶと社長判定へ進む。早期終了のガードやターン上限時の強制提出はオーケストレータが制御する。監査ログは `shared/logs/meeting_turn_audit.jsonl` に追記される。
 
 ### 4.5 成果物
 
@@ -143,6 +146,15 @@ PM が `FINISH_FOR_PRESIDENT` を選ぶと社長判定へ進む。早期終了�
 
 公開時は Pages 成果物に同梱され、`shared/meeting.html` から閲覧できる。
 
+### 4.6 運用ログ（Pages 非公開）
+
+Bot が書き込む運用ログ。GitHub Pages には同梱しない。
+
+| ファイル | 用途 |
+|----------|------|
+| `shared/logs/proposal_views.json` | 永続 Discord View（社長判定ボタン等）の復元用 |
+| `shared/logs/meeting_turn_audit.jsonl` | 位相ガード・ターン監査の追記ログ |
+
 ---
 
 ## 5. 社長判定（Go / NoGo / 中止）
@@ -151,8 +163,8 @@ PM が `FINISH_FOR_PRESIDENT` を選ぶと社長判定へ進む。早期終了�
 
 | 判定 | 結果 |
 |------|------|
-| **Go** | 採用プランの仕様書を自動生成し、`spec_game_links.json` に記録を追加する |
-| **NoGo** | 修正方針モーダルに入力 → 方針を最優先として再会議 |
+| **Go** | 採用プランの仕様書を自動生成し、`spec_game_links.json` に記録を追加する。このときの `artifact_stem` が仕様・レビュー・反省会の正本になる |
+| **NoGo** | 修正方針モーダルに入力 → 方針を最優先として再会議。再会議のたびに `build_artifact_stem(theme)` で **新しい `artifact_stem`** を発行する（実装: `ai-core/src/main.py` の会議開始）。旧会議 jsonl は仕様未生成のまま残りうる |
 | **中止** | 仕様書生成・再会議なし。この企画会議を終了する |
 
 Go 直後のメッセージ例（運用上の目印）: 仕様書の自動出力・保存完了通知、および採番された `game_id` / 予定パス。
@@ -195,7 +207,9 @@ Go 直後のメッセージ例（運用上の目印）: 仕様書の自動出力
 ```
 game-projects/
 ├── index.html                 # ポータル
-├── assets/                    # サムネ等
+├── staff.html                 # 社員紹介（プロセス閲覧 UI。ゲーム実装規約の対象外）
+├── .nojekyll
+├── assets/                    # サムネ・favicon・ブランド画像
 ├── common/
 │   ├── stats.js               # ポータル／ゲーム共用の計測クライアント
 │   └── storage.js             # ログイン不要のローカルセーブヘルパー
@@ -203,6 +217,8 @@ game-projects/
     └── src/
         └── index.html         # ゲーム本体
 ```
+
+ディレクトリ例: `001_matatabi_chaos` / `002_heavy_love_snake`（個別ルールは各 `shared/specs/spec_*.md` が正本）。
 
 ### 7.3 統計連携
 
@@ -222,6 +238,8 @@ KotatsuStats.sendPlayCount("your_game_id");
 ```
 
 引数の `game_id` は仕様作成時に採番されたスラッグ、ディレクトリ名のスラッグ、ポータルの `data-game-id` / `data-stat-id` と **すべて一致**させる。短名別名は禁止。予約キー `pv` はポータル PV 専用でゲーム ID に使わない。
+
+品質ゲート（§9.3）は `sendPlayCount("game_id")` の **文字列リテラル** を要求する。変数や式経由の呼び出しは掲載連携チェックで不合格になる。
 
 ### 7.4 ローカルセーブ（ログイン不要）
 
@@ -250,9 +268,9 @@ KotatsuStorage.set("your_game_id", "highScore", best);
 
 | 項目 | 規約 | 例 |
 |------|------|-----|
-| ゲームディレクトリ | `{3桁連番}_{snake_case_slug}` | `001_matatabi_chaos` |
+| ゲームディレクトリ | `{3桁連番}_{snake_case_slug}` | `001_matatabi_chaos`, `002_heavy_love_snake` |
 | エントリ | `.../src/index.html` | `game-projects/001_matatabi_chaos/src/index.html` |
-| `game_id` | スラッグ部分（英小文字 snake_case） | `matatabi_chaos` |
+| `game_id` | スラッグ部分（英小文字 snake_case） | `matatabi_chaos`, `heavy_love_snake` |
 | 採番タイミング | 社長 Go → 仕様書作成時に自動 | `ai-core/src/game_id_allocator.py` |
 | `artifact_stem` | `{テーマスラッグ}_{YYYYMMDD_HHMMSS}` | `テトリスと猫を掛け合わせたゲームを作って_20260725_124622` |
 | 仕様 | `shared/specs/spec_{stem}.md` | |
@@ -271,7 +289,9 @@ KotatsuStorage.set("your_game_id", "highScore", best);
 
 `artifact_stem` の生成・パス解決は `ai-core/src/artifact_naming.py` が正。
 
-同一ゲームの仕様・会議・レビューは **同じ `artifact_stem`** で揃える。反省会・レジストリ解決の前提になる。
+- 会議開始（初回・NoGo 再会議とも）のたびに新しい `artifact_stem` が発行される
+- **Go 以降**の仕様・会議ログ・レビューは **同じ `artifact_stem`** で揃える。反省会・レジストリ解決の前提になる
+- NoGo で打ち切られた旧会議 jsonl はレジストリ未登録のまま残りうる（正本ではない）
 
 ---
 
@@ -296,7 +316,7 @@ python scripts/link_spec_to_game.py \
 
 1. レジストリの予約 `game_id` / `game_path` を確認する
 2. `game-projects/{NNN}_{slug}/src/index.html` を実装する（予約どおりのディレクトリ名）
-3. `game-projects/index.html` にカードを追加し、`data-game-id` / `data-stat-id` / `sendPlayCount` を同一 `game_id` にする
+3. `game-projects/index.html` にカードを追加し、`data-game-id` / `data-stat-id` / `sendPlayCount("game_id")`（文字列リテラル）を同一 `game_id` にする
 4. `game-projects/assets/{NNN}_{slug}.png` にサムネを置く
 5. 仕様・会議リンクがポータルから辿れることを確認する
 6. 品質ゲート（§9.3）をローカルまたは CI で通す
@@ -307,8 +327,10 @@ python scripts/link_spec_to_game.py \
 
 | チェック | 内容 | 入口 |
 |----------|------|------|
-| HTML/JS 構文 | `game-projects/*/src/index.html`・ポータル・`common/*.js` の DOCTYPE / `<script>`・`<style>` 対応・インライン／外部 JS 構文（Node `node --check`） | `game_syntax_check.py` |
-| ポータル自動掲載連携 | レジストリで紐づき実ファイルがあるゲームが、ポータルカード・プレイリンク・`data-game-id` / `data-stat-id`・`sendPlayCount` と一致していること | `portal_listing_check.py` |
+| HTML/JS 構文 | `game-projects/*/src/index.html`・ポータル・`common/*.js` の DOCTYPE / `<script>`・`<style>` 対応・インライン／外部 JS 構文（Node `node --check`） | `ai-core/src/game_syntax_check.py` |
+| ポータル自動掲載連携 | レジストリで紐づき実ファイルがあるゲームが、ポータルカード・プレイリンク・`data-game-id` / `data-stat-id`・`sendPlayCount("game_id")`（文字列リテラル）と一致していること | `ai-core/src/portal_listing_check.py` |
+
+CLI 入口: `ai-core/scripts/check_game_quality.py`
 
 ```bash
 cd kotatsu-soft/ai-core
@@ -322,6 +344,16 @@ pytest -q tests/test_game_syntax_check.py tests/test_portal_listing_integration.
 
 仮登録のみ（HTML 未作成）のゲームは掲載連携の対象外。実ファイルが存在する完成ゲームだけを検証する。
 
+### 9.4 社員紹介・アバター（閲覧 UI）
+
+プロセス成果物の公開閲覧面であり、ゲーム実装規約の対象外。
+
+| 項目 | 内容 |
+|------|------|
+| 社員紹介 | `game-projects/staff.html`。各エージェントの `public_profile` と `lessons_learned.yaml` を GitHub raw から読み表示 |
+| アバター | `ai-core/assets/avatars/{pm,dev,marketing,nobuta}.png`。`staff.html` / `shared/meeting.html` が raw.githubusercontent.com 経由で参照 |
+| ポータル導線 | `index.html` から `staff.html` へリンク |
+
 ---
 
 ## 10. 公開（GitHub Pages）
@@ -331,9 +363,20 @@ pytest -q tests/test_game_syntax_check.py tests/test_portal_listing_integration.
 - `main` ブランチへの push（対象パス: `kotatsu-soft/game-projects/**`, `kotatsu-soft/shared/**`, ワークフロー自身）
 - Actions からの手動実行（`Deploy game-projects to GitHub Pages`）
 
-### デプロイ内容（概要）
+### デプロイ内容（同梱）
 
-ワークフローは `game-projects` を Pages ルートにコピーし、`shared/spec.html`・`shared/meeting.html`・仕様 Markdown・会議 jsonl を同梱する。
+ワークフローは次を Pages ルートに載せる。
+
+- `game-projects/` 全体（ポータル・`staff.html`・各ゲーム・`assets/`・`common/`）
+- `shared/spec.html`・`shared/meeting.html`
+- `shared/specs/*`（仕様 Markdown・レジストリ）
+- `shared/meeting/*.jsonl`（会議ログ）
+
+### デプロイ対象外（非同梱）
+
+- `shared/review/`（プレイテストレビュー）
+- `shared/logs/`（Bot 運用ログ）
+- `ai-core/` 本体（アバターは raw.githubusercontent.com 経由で参照）
 
 初回の Pages ソース設定（GitHub Actions）は [README.md](./README.md) の「GitHub Pages 公開」を参照。
 
@@ -345,11 +388,13 @@ pytest -q tests/test_game_syntax_check.py tests/test_portal_listing_integration.
 
 ### 目的
 
-実装後の指摘と修正履歴を、仕様・会議と同じ `artifact_stem` で残し、反省会の入力にする。
+実装後の指摘と修正履歴を、**Go した**仕様・会議と同じ `artifact_stem` で残し、反省会の入力にする。
 
 ### 置き場
 
 `shared/review/review_{artifact_stem}.md`
+
+Pages には同梱されない（リポジトリ内の運用成果物）。
 
 ### 推奨構成
 
@@ -369,7 +414,7 @@ pytest -q tests/test_game_syntax_check.py tests/test_portal_listing_integration.
 
 仕様・会議ログ・レビュー・完成コードを読み、各 AI 社員の教訓（1〜2文×3個程度）を進化させる。レビュー指摘を最優先し、具体→抽象化した再発防止則へ更新する（言い換えのみは禁止）。
 
-更新された教訓は次回企画会議の system instruction に自動で入り、テーマ非依存の原則として発言に反映される。
+更新された教訓は次回企画会議の system instruction に自動で入り、テーマ非依存の原則として発言に反映される。社員紹介ページ（`staff.html`）からも公開表示される。
 
 ### 出力先
 
@@ -379,7 +424,7 @@ pytest -q tests/test_game_syntax_check.py tests/test_portal_listing_integration.
 
 ### 前提
 
-1. 仕様・会議ログ・レビューが同じ `artifact_stem` で揃っている
+1. 仕様・会議ログ・レビューが **Go した同じ `artifact_stem`** で揃っている
 2. できれば `spec_game_links.json` でゲーム本体へ紐づいている（未紐づけなら `--game-path` を指定）
 3. `ai-core/.env` に `GEMINI_API_KEY` がある
 
@@ -397,16 +442,16 @@ CLI・Discord からの起動手順は [README.md](./README.md) の「開発完�
 運用時は本節だけ追ってもよい。
 
 - [ ] Discord の社長命令チャンネルから企画会議を開始し、完走する
-- [ ] 社長が **Go** する（NoGo なら修正方針を入れて再会議）
-- [ ] 仕様書・レジストリ・Discord 通知の **自動採番 `game_id` / 予定パス** を確認する
+- [ ] 社長が **Go** する（NoGo なら修正方針を入れて再会議。再会議は新 `artifact_stem`）
+- [ ] 仕様書・レジストリ・Discord 通知の **自動採番 `game_id` / 予定パス** を確認する（Go した stem が正本）
 - [ ] 予約どおりの `game-projects/{NNN}_{slug}/src/index.html` を実装する（単一 HTML・外部エンジンなし）
-- [ ] `KotatsuStats.sendPlayCount("{game_id}")` を入れる（予約 ID と一致）
+- [ ] `KotatsuStats.sendPlayCount("{game_id}")` を **文字列リテラル** で入れる（予約 ID と一致。変数経由は不可）
 - [ ] 永続化が必要なら `KotatsuStorage`（`common/storage.js`）を使い、`game_id` でキーを名前空間化する
 - [ ] ポータルにカード・サムネ・`data-game-id` / `data-stat-id` を追加する（同一 ID）
 - [ ] （必要なときだけ）`link_spec_to_game.py` でタイトルやパスを更新する
 - [ ] `python scripts/check_game_quality.py` で構文・ポータル掲載連携を通す
 - [ ] `main` に push し、Pages 反映を確認する
-- [ ] `shared/review/review_{stem}.md` にプレイテスト結果を残す
+- [ ] `shared/review/review_{stem}.md` にプレイテスト結果を残す（Go した stem）
 - [ ] 反省会（CLI または Discord）で教訓を更新する
 
 ---
@@ -423,6 +468,7 @@ CLI・Discord からの起動手順は [README.md](./README.md) の「開発完�
 
 | 日付 | 要約 |
 |------|------|
+| 2026-07-30 | 実装実態に同期。NoGo 再会議の新 artifact_stem、sendPlayCount 文字列リテラル必須、staff.html / アバター / shared/logs、Pages 同梱・非同梱範囲、グランドルール読込パス、002_heavy_love_snake 命名例を明文化 |
 | 2026-07-30 | 社長判定に「中止」を追加。Go/NoGo/中止の3択とし、中止は仕様生成・再会議なしで終了 |
 | 2026-07-30 | ログイン不要のローカルセーブ共通ヘルパー（`KotatsuStorage` / `storage.js`）を追加。matatabi_chaos にハイスコア配線 |
 | 2026-07-30 | 品質管理を追加。完成ゲーム HTML/JS 構文検知とポータル自動掲載連携テスト（CI・Pages デプロイ前ゲート） |
