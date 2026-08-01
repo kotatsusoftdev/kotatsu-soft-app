@@ -1,0 +1,414 @@
+{
+  "last_updated": "2026-08-01T11:48:34Z",
+  "total_count": 12,
+  "mechanics": [
+    {
+      "mechanic_id": "mech_grid_puzzle_slide_sokoban",
+      "dedupe_key": "grid_puzzle_slide_sokoban",
+      "name": "スライド移動式倉庫番パズル",
+      "core_loop": "滑る床の上でキャラクターを動かし、障害物を避けながら指定位置にブロックを配置する",
+      "inspiration": {
+        "source_title": "Slideokoban",
+        "unique_motif": "グリッド上を滑るように移動する特殊な移動制限",
+        "twist_gimmick": "一度動き出すと壁にぶつかるまで止まらない滑り床ギミック"
+      },
+      "tags": [
+        "2D",
+        "パズル",
+        "倉庫番",
+        "グリッド"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "Tilemap",
+          "GridMovement"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "シンプルなルールながら頭を悩ませる難易度でSNSでの共有が狙える",
+        "target_audience": "パズルゲーム愛好家、思考系ゲーム好き"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-01T11:36:25Z"
+    },
+    {
+      "mechanic_id": "mech_clicker_origami_crane",
+      "dedupe_key": "clicker_origami_crane_batch",
+      "name": "千羽鶴量産クリッカー",
+      "core_loop": "画面をクリックしてリソースを稼ぎ、自動化や効率化のアップグレードを繰り返す",
+      "inspiration": {
+        "source_title": "千羽鶴クリッカー",
+        "unique_motif": "和風で縁起の良い「千羽鶴を折る」というテーマの数字インフレ",
+        "twist_gimmick": "折るたびに鶴の群れが増殖し、一定数ごとに特殊な演出が発生する"
+      },
+      "tags": [
+        "2D",
+        "クリッカー",
+        "放置ゲーム",
+        "インフレ"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 1,
+        "recommended_engine_features": [
+          "UI",
+          "DataPersistence"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "数字が爆発的に増える爽快感と連打によるストレス発散",
+        "target_audience": "クリッカー・放置ゲームファン、短時間で遊びたい層"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-01T11:36:25Z"
+    },
+    {
+      "mechanic_id": "mech_reflex_visual_trust",
+      "dedupe_key": "reflex_visual_trust_test",
+      "name": "動体視力測定リアクションゲーム",
+      "core_loop": "ランダムに出現・移動するターゲットを目で追い、瞬時に正確な位置をクリックする",
+      "inspiration": {
+        "source_title": "TRUST動体視力",
+        "unique_motif": "プレイヤーの反射神経や動体視力をシビアに数値化するテスト形式",
+        "twist_gimmick": "視覚を惑わせるフェイントや背景同化フェーズが挟まる"
+      },
+      "tags": [
+        "2D",
+        "反射神経",
+        "動体視力",
+        "ミニゲーム"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 1,
+        "recommended_engine_features": [
+          "Raycast2D",
+          "Timer"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "スコアを競い合って「自分の動体視力」をX(Twitter)でシェアしたくなる",
+        "target_audience": "ゲーマー、反射神経に自信のある層"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-01T11:36:25Z"
+    },
+    {
+      "mechanic_id": "mech_physics_launch_iron_ball",
+      "dedupe_key": "physics_launch_iron_ball_trajectory",
+      "name": "軌道予測・鉄球射出アクション",
+      "core_loop": "発射角度とパワーを調整して鉄球を飛ばし、ステージ上の目標を破壊・到達させる",
+      "inspiration": {
+        "source_title": "鉄球飛ばし",
+        "unique_motif": "重量感のある鉄球を使ったダイナミックな破壊と軌道計算",
+        "twist_gimmick": "風圧や重力変化、壊れる足場が軌道を狂わせる"
+      },
+      "tags": [
+        "2D",
+        "物理演算",
+        "軌道予測",
+        "アクション"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "Rigidbody2D",
+          "LineRenderer"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "一発逆転のスーパーショットが決まった時の快感が大きい",
+        "target_audience": "物理パズルや一撃系ゲームのファン"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-01T11:36:25Z"
+    },
+    {
+      "mechanic_id": "mech_word_puzzle_ayakana",
+      "dedupe_key": "word_puzzle_ayakana_kanji",
+      "name": "妖異言葉繋ぎパズル",
+      "core_loop": "バラバラの文字パーツを組み合わせて正しい言葉や妖怪の真名を完成させる",
+      "inspiration": {
+        "source_title": "妖言葉（あやことば）",
+        "unique_motif": "妖怪や和風ホラーのフレーバーを漂わせる漢字・言葉の組み合わせ",
+        "twist_gimmick": "制限時間内に文字が呪われて形を変えていく文字変形ギミック"
+      },
+      "tags": [
+        "2D",
+        "ワードパズル",
+        "和風",
+        "ホラー"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "TextMeshPro",
+          "UIEventSystem"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "独特の不気味な世界観と知的好奇心を刺激する謎解き",
+        "target_audience": "和風デザイン好き、言葉あそびパズルファン"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-01T11:36:25Z"
+    },
+    {
+      "mechanic_id": "mech_grid_puzzle_slide_sokoban",
+      "dedupe_key": "grid_puzzle_sliding_blocks_sokoban",
+      "name": "スライド移動パズル",
+      "core_loop": "グリッド上のオブジェクトを壁や障害物を利用して目的の位置まで滑らせて配置する",
+      "inspiration": {
+        "source_title": "Slideokoban",
+        "unique_motif": "タイトルの通り「Slide」を強調したミニマルな倉庫番スタイルのパズル",
+        "twist_gimmick": "摩擦が一切なく壁にぶつかるまで止まらないため、移動経路の逆算がシビアになる"
+      },
+      "tags": [
+        "2D",
+        "パズル",
+        "グリッド",
+        "脳トレ"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 1,
+        "recommended_engine_features": [
+          "Tilemap",
+          "Grid System"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "シンプルなルールながら高難易度なステージで「解けた時の爽快感」がSNSシェアに繋がりやすい",
+        "target_audience": "パズルゲーム愛好家、すきま時間で頭を使いたいプレイヤー"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-01T11:48:34Z"
+    },
+    {
+      "mechanic_id": "mech_reflex_check_trust",
+      "dedupe_key": "reflex_moving_vision_check_trust",
+      "name": "動体視力測定リアクションゲーム",
+      "core_loop": "画面内を高速で移動・変化するターゲットを瞬時に見極めてタップする",
+      "inspiration": {
+        "source_title": "TRUST動体視力",
+        "unique_motif": "プレイヤーの反射神経と動体視力をストレートに数値化する健康診断風のテスト",
+        "twist_gimmick": "視覚的なフェイクや背景のノイズが混ざる中で的確に正解だけを撃ち抜く必要がある"
+      },
+      "tags": [
+        "2D",
+        "動体視力",
+        "反射神経",
+        "スコアアタック"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 1,
+        "recommended_engine_features": [
+          "UI System",
+          "Timer/Coroutine"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "「自分の動体視力は何歳相当か」といった結果をX（旧Twitter）で共有したくなる",
+        "target_audience": "自分の反射神経を試したい配信者、短時間で手軽に遊びたい層"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-01T11:48:34Z"
+    },
+    {
+      "mechanic_id": "mech_incremental_clicker_tsurube",
+      "dedupe_key": "incremental_clicker_paper_cranes",
+      "name": "千羽鶴折りインクリメンタル",
+      "core_loop": "ひたすら画面をタップして生産リソースを溜め、自動化や効率化のアップグレードを繰り返す",
+      "inspiration": {
+        "source_title": "千羽鶴クリッカー",
+        "unique_motif": "日本的でシュールな「千羽鶴を折り続ける」という無限の労力テーマ",
+        "twist_gimmick": "折った鶴の数に応じて謎の恩恵や折り手（助っ人）が増えていき、画面が鶴で埋め尽くされる"
+      },
+      "tags": [
+        "2D",
+        "クリッカー",
+        "放置ゲーム",
+        "インクリメンタル"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 1,
+        "recommended_engine_features": [
+          "UI Layout",
+          "Save/Load (JSON)"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "インフレしていく数字の大きさや、折り鶴が画面を覆い尽くすカオスな絵面がネタになりやすい",
+        "target_audience": "放置ゲーム好き、数字を大きくするのが好きなプレイヤー"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-01T11:48:34Z"
+    },
+    {
+      "mechanic_id": "mech_suika_merge_fish",
+      "dedupe_key": "physics_drop_merge_sakana",
+      "name": "サカナ落下合成パズル",
+      "core_loop": "上から落とした小さなオブジェクト同士を接触させて大きな上位種へと進化・合体させていく",
+      "inspiration": {
+        "source_title": "サカナゲーム",
+        "unique_motif": "海の生き物やサカナをモチーフにしたスイカゲームライクな落下物合成",
+        "twist_gimmick": "水圧や浮力の物理演算がわずかに働き、積み上げたサカナたちがぷかぷか動いて予期せぬ連鎖を生む"
+      },
+      "tags": [
+        "2D",
+        "物理演算",
+        "合成パズル",
+        "スイカゲーム系"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "Rigidbody2D",
+          "Collision Event Handling"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "「あと少しで巨大な魚になったのに！」という惜しい瞬間のクリップがSNSで拡散されやすい",
+        "target_audience": "カジュアルパズルファン、配信映えするゲームを探しているユーザー"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-01T11:48:34Z"
+    },
+    {
+      "mechanic_id": "mech_hidden_object_deepsea",
+      "dedupe_key": "hidden_object_search_deepsea",
+      "name": "深海アイテム探し探索ゲーム",
+      "core_loop": "暗い視界や限られた光源を頼りに、広大な海の底から指定された隠しアイテムを見つけ出す",
+      "inspiration": {
+        "source_title": "深海さがし（UNITY版）",
+        "unique_motif": "不気味で美しい深海を舞台にした「ウォーリーをさがせ！」風の探索",
+        "twist_gimmick": "深海の水圧や酸素残量、あるいは視界が狭まるライトのギミックが探索に焦燥感を加える"
+      },
+      "tags": [
+        "2D",
+        "探索",
+        "隠しオブジェクト",
+        "深海"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "2D Lighting",
+          "Raycasting / Point & Click"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "「ここにあるのに見つからない！」というもどかしさや、不気味な深海の雰囲気が話題になる",
+        "target_audience": "じっくり探すのが好きな人、深海やホラーテイストが好きな層"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-01T11:48:34Z"
+    },
+    {
+      "mechanic_id": "mech_dodge_action_sword",
+      "dedupe_key": "dodge_action_2d_sword",
+      "name": "2D剣撃回避サバイバル",
+      "core_loop": "四方八方から飛来する無数の剣や障害物を自機を動かしてひたすら避け続ける",
+      "inspiration": {
+        "source_title": "2D Sword Dodge Game",
+        "unique_motif": "剣（ソード）の雨が降り注ぐ中を華麗にステップで避ける硬派な回避アクション",
+        "twist_gimmick": "プレイヤーの移動軌跡に沿って剣の雨の密度やパターンが変化し、安全地帯が刻々と消滅する"
+      },
+      "tags": [
+        "2D",
+        "回避アクション",
+        "避弾ケシ",
+        "サバイバル"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "Transform Move",
+          "Object Pooling"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "紙一重で弾幕や剣を避ける神プレイ動画がSNSでシェアされやすい",
+        "target_audience": "アクションゲームが得意なゲーマー、高難易度を好む層"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-01T11:48:34Z"
+    },
+    {
+      "mechanic_id": "mech_physics_launcher_ironball",
+      "dedupe_key": "physics_launcher_destruction_ironball",
+      "name": "鉄球発射破壊シミュレーション",
+      "core_loop": "引っ張りアクションで鉄球を放ち、構造物を効率よく破壊してターゲットを撃破する",
+      "inspiration": {
+        "source_title": "鉄球飛ばし",
+        "unique_motif": "重量感のある鉄球で建造物や障害物をド派手に粉砕する物理破壊",
+        "twist_gimmick": "制限された発射回数の中で、ギミック（爆発樽や不安定な支柱）を利用した連鎖破壊を狙う"
+      },
+      "tags": [
+        "2D",
+        "物理演算",
+        "破壊",
+        "パズルアクション"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "Rigidbody2D",
+          "LineRenderer (Slingshot)"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "すべてが綺麗に崩壊した瞬間のカタルシスがクリップ動画として映える",
+        "target_audience": "ストレス発散したいプレイヤー、物理パズルが好きな層"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-01T11:48:34Z"
+    }
+  ]
+}

@@ -30,8 +30,20 @@ def test_config_load_requires_post_mortem_channel(monkeypatch: pytest.MonkeyPatc
     assert "POST_MORTEM_CHANNEL_ID" in str(exc_info.value)
 
 
+def test_config_load_requires_market_research_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("MARKET_RESEARCH_CHANNEL_ID", raising=False)
+
+    with pytest.raises(config_module.ConfigError) as exc_info:
+        config_module.Config.load()
+
+    assert "MARKET_RESEARCH_CHANNEL_ID" in str(exc_info.value)
+
+
 def test_config_load_reads_channel_ids(monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = config_module.Config.load()
     assert cfg.PRESIDENT_ORDER_CHANNEL_ID == 111
     assert cfg.MEETING_CHANNEL_ID == 222
     assert cfg.POST_MORTEM_CHANNEL_ID == 333
+    assert cfg.MARKET_RESEARCH_CHANNEL_ID == 444

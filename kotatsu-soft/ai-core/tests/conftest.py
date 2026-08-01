@@ -17,5 +17,6 @@ def base_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GEMINI_API_KEY", "dummy-gemini-key")
     monkeypatch.setenv("MEETING_CHANNEL_ID", "222")
     monkeypatch.setenv("POST_MORTEM_CHANNEL_ID", "333")
+    monkeypatch.setenv("MARKET_RESEARCH_CHANNEL_ID", "444")
     monkeypatch.setenv("PRESIDENT_MENTION", "@president")
 

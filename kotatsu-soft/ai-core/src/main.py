@@ -13,8 +13,14 @@ from artifact_naming import build_artifact_stem
 from config import ConfigError, Config, get_config
 from meeting_chat_log import MeetingChatLogWriter, normalize_plain_text
 from orchestrator import DynamicOrchestrator, ProposalSelectView, build_president_final_message
+from market_research import MarketResearchError, MarketResearcher
 from post_mortem import LessonUpdate, format_lesson_items, run_post_mortem
 from spec_link_registry import get_latest_linked_game
+from theme_proposal import (
+    ThemeProposalError,
+    ThemeProposer,
+    build_meeting_theme_text,
+)
 from agents.dev.agent import DevAgent
 from agents.marketing.agent import MarketingAgent
 from agents.pm.agent import PMAgent
@@ -34,6 +40,8 @@ _meeting_guard_lock = asyncio.Lock()
 _active_meeting_channel_ids: set[int] = set()
 _post_mortem_lock = asyncio.Lock()
 _post_mortem_running = False
+_market_research_lock = asyncio.Lock()
+_market_research_running = False
 _config: Optional[Config] = None
 _DISCORD_MESSAGE_LIMIT = 1900
 _post_mortem_webhooks: dict[int, discord.Webhook] = {}
@@ -228,6 +236,21 @@ async def _end_post_mortem() -> None:
         _post_mortem_running = False
 
 
+async def _try_begin_market_research() -> bool:
+    global _market_research_running
+    async with _market_research_lock:
+        if _market_research_running:
+            return False
+        _market_research_running = True
+        return True
+
+
+async def _end_market_research() -> None:
+    global _market_research_running
+    async with _market_research_lock:
+        _market_research_running = False
+
+
 def _chunk_discord_text(text: str, limit: int = _DISCORD_MESSAGE_LIMIT) -> list[str]:
     text = (text or "").strip()
     if not text:
@@ -350,6 +373,160 @@ async def publish_post_mortem_results(
         )
 
 
+def build_market_research_proposal_message() -> str:
+    return (
+        "ヂャイアンに市場調査（トレンド＋ゲームメカニクス）をやらせますか？\n"
+        "- 出力: `shared/research/latest_trends.json` / `mechanics_db.json`\n"
+        "- 所要: 外部API呼び出しあり（数十秒〜数分）"
+    )
+
+
+def format_market_research_summary(trends: dict, mechanics: dict) -> str:
+    trend_items = trends.get("trends") if isinstance(trends, dict) else None
+    if not isinstance(trend_items, list):
+        trend_items = []
+    mech_items = mechanics.get("mechanics") if isinstance(mechanics, dict) else None
+    if not isinstance(mech_items, list):
+        mech_items = []
+
+    lines = [
+        "おう、のぶ太！オレ様が市場調査をぶちかましてやったぜ！",
+        "",
+        f"トレンド: {len(trend_items)}件（上書き）",
+        f"メカニクスDB: 合計 {mechanics.get('total_count', len(mech_items))}件",
+        f"データソース: {trends.get('data_source') or '（不明）'}",
+        "",
+        "【トレンド上位】",
+    ]
+    for item in trend_items[:5]:
+        if not isinstance(item, dict):
+            continue
+        keyword = item.get("keyword") if isinstance(item.get("keyword"), dict) else {}
+        original = str(keyword.get("original") or "").strip()
+        abstracted = str(keyword.get("abstracted") or "").strip()
+        platform = str(item.get("sns_platform") or "Hybrid")
+        viral = item.get("viral_score", "?")
+        label = abstracted or original or "(無題)"
+        lines.append(f"- [{platform}] {label} (viral={viral})")
+        if original and original != label:
+            short_original = original if len(original) <= 80 else original[:80] + "…"
+            lines.append(f"  元: {short_original}")
+
+    lines.append("")
+    lines.append("【メカニクス（代表）】")
+    if not mech_items:
+        lines.append("- （なし）")
+    else:
+        # 新しいもの優先で末尾から
+        for item in list(mech_items)[-5:]:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip() or "(無題)"
+            insp = item.get("inspiration") if isinstance(item.get("inspiration"), dict) else {}
+            motif = str(insp.get("unique_motif") or "").strip()
+            if motif:
+                lines.append(f"- {name} / {motif}")
+            else:
+                lines.append(f"- {name}")
+
+    lines.append("")
+    lines.append(
+        "詳細は `shared/research/latest_trends.json` と "
+        "`shared/research/mechanics_db.json` を見やがれ！"
+    )
+    return "\n".join(lines)
+
+
+async def publish_market_research_results(
+    channel: discord.TextChannel,
+    trends: dict,
+    mechanics: dict,
+) -> None:
+    await channel.send("✅ 市場調査が完了しました。ヂャイアンが概要を報告します。")
+    await _post_as_agent(
+        channel,
+        username="ヂャイアン(マーケ)",
+        avatar_url=_AGENT_AVATAR_URLS["marketing"],
+        content=format_market_research_summary(trends, mechanics),
+    )
+
+
+class MarketResearchConfirmView(discord.ui.View):
+    def __init__(self, *, api_key: str, results_channel_id: int):
+        super().__init__(timeout=600)
+        self.api_key = api_key
+        self.results_channel_id = results_channel_id
+
+        start_button = discord.ui.Button(
+            label="はじめる",
+            style=discord.ButtonStyle.success,
+            custom_id="market_research_start",
+        )
+        start_button.callback = self._on_start
+        self.add_item(start_button)
+
+        cancel_button = discord.ui.Button(
+            label="やめる",
+            style=discord.ButtonStyle.secondary,
+            custom_id="market_research_cancel",
+        )
+        cancel_button.callback = self._on_cancel
+        self.add_item(cancel_button)
+
+    def _disable_buttons(self) -> None:
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+
+    async def _on_cancel(self, interaction: discord.Interaction) -> None:
+        self._disable_buttons()
+        if interaction.message is not None:
+            await interaction.message.edit(view=self)
+        await interaction.response.send_message("キャンセルしました。", ephemeral=False)
+        self.stop()
+
+    async def _on_start(self, interaction: discord.Interaction) -> None:
+        reserved = await _try_begin_market_research()
+        if not reserved:
+            await interaction.response.send_message(
+                "⏳ 市場調査はすでに実行中です。完了までお待ちください。",
+                ephemeral=False,
+            )
+            return
+
+        self._disable_buttons()
+        if interaction.message is not None:
+            await interaction.message.edit(view=self)
+
+        await interaction.response.send_message(
+            "🔄 ヂャイアンが市場調査中です…（Yahoo / Togetter / Tavily / unityroom）",
+            ephemeral=False,
+        )
+
+        try:
+            results_channel = await resolve_text_channel(self.results_channel_id)
+            if results_channel is None:
+                await interaction.followup.send(
+                    "⚠️ 市場調査チャンネルが見つかりません。"
+                    "MARKET_RESEARCH_CHANNEL_ID の設定を確認してください。"
+                )
+                return
+
+            def _run() -> tuple[dict, dict]:
+                researcher = MarketResearcher(gemini_api_key=self.api_key)
+                return researcher.run_all()
+
+            trends, mechanics = await asyncio.to_thread(_run)
+            await publish_market_research_results(results_channel, trends, mechanics)
+        except MarketResearchError as exc:
+            await interaction.followup.send(f"[market_research] 失敗しました: {exc}")
+        except Exception as exc:
+            await interaction.followup.send(f"[market_research] 失敗しました: {exc}")
+        finally:
+            await _end_market_research()
+            self.stop()
+
+
 class PostMortemConfirmView(discord.ui.View):
     def __init__(
         self,
@@ -460,35 +637,44 @@ async def resolve_post_mortem_channel() -> Optional[discord.TextChannel]:
     return await resolve_text_channel(cfg.POST_MORTEM_CHANNEL_ID)
 
 
+async def resolve_market_research_channel() -> Optional[discord.TextChannel]:
+    cfg = _get_config_or_raise()
+    return await resolve_text_channel(cfg.MARKET_RESEARCH_CHANNEL_ID)
+
+
 async def start_meeting_from_theme(
     theme: str,
     *,
     order_channel: discord.abc.Messageable,
+    already_reserved: bool = False,
+    meeting_channel: Optional[discord.TextChannel] = None,
 ) -> None:
-    meeting_channel = await resolve_meeting_channel()
-    if meeting_channel is None:
+    channel = meeting_channel or await resolve_meeting_channel()
+    if channel is None:
         await order_channel.send(
             "⚠️ 企画検討チャンネルが見つかりません。MEETING_CHANNEL_ID の設定を確認してください。"
         )
         return
 
-    reserved = await _try_reserve_meeting_channel(meeting_channel.id)
-    if not reserved:
-        await meeting_channel.send(
-            "⏳ 企画検討はすでに進行中です。現在の会議が終わるまでお待ちください。"
-        )
-        await order_channel.send(
-            f"⏳ 企画検討はすでに進行中です。企画検討チャンネル <#{meeting_channel.id}> を確認してください。"
-        )
-        return
+    if not already_reserved:
+        reserved = await _try_reserve_meeting_channel(channel.id)
+        if not reserved:
+            await channel.send(
+                "⏳ 企画検討はすでに進行中です。現在の会議が終わるまでお待ちください。"
+            )
+            await order_channel.send(
+                f"⏳ 企画検討はすでに進行中です。企画検討チャンネル <#{channel.id}> を確認してください。"
+            )
+            return
 
-    await meeting_channel.send(
-        f"📥 了解しました。テーマ「{theme}」でただちにPM AIへ仕様策定を回します。"
+    short_theme = theme.strip().splitlines()[0] if theme.strip() else theme
+    await channel.send(
+        f"📥 了解しました。テーマ「{short_theme}」でただちにPM AIへ仕様策定を回します。"
     )
     try:
-        await run_meeting_round(theme, meeting_channel)
+        await run_meeting_round(theme, channel)
     finally:
-        await _release_meeting_channel(meeting_channel.id)
+        await _release_meeting_channel(channel.id)
 
 
 async def propose_post_mortem(
@@ -536,9 +722,336 @@ async def propose_post_mortem(
     await results_channel.send(build_post_mortem_proposal_message(latest), view=view)
 
 
+async def propose_market_research(
+    *,
+    order_channel: discord.abc.Messageable,
+    cfg: Config,
+) -> None:
+    async with _market_research_lock:
+        if _market_research_running:
+            await order_channel.send("⏳ 市場調査実行中です。完了までお待ちください。")
+            return
+
+    results_channel = await resolve_market_research_channel()
+    if results_channel is None:
+        await order_channel.send(
+            "⚠️ 市場調査チャンネルが見つかりません。"
+            "MARKET_RESEARCH_CHANNEL_ID の設定を確認してください。"
+        )
+        return
+
+    async with _market_research_lock:
+        if _market_research_running:
+            await order_channel.send("⏳ 市場調査実行中です。完了までお待ちください。")
+            return
+
+    view = MarketResearchConfirmView(
+        api_key=cfg.GEMINI_API_KEY,
+        results_channel_id=results_channel.id,
+    )
+    await order_channel.send(
+        f"市場調査チャンネル <#{results_channel.id}> で確認してください。"
+    )
+    await results_channel.send(build_market_research_proposal_message(), view=view)
+
+
+def format_theme_options_agent_message(payload: dict) -> str:
+    options = payload.get("options") if isinstance(payload, dict) else None
+    if not isinstance(options, list):
+        options = []
+    lines = [
+        "おう、のぶ太！オレ様がトレンド×ゲーム性でバカゲー企画をぶち上げてやったぜ！",
+        "気に入った案を選べ。イマイチなら『もう一度検討』か『フリー入力』だ！",
+        "",
+    ]
+    for opt in options:
+        if not isinstance(opt, dict):
+            continue
+        oid = opt.get("option_id", "?")
+        title = str(opt.get("title") or "").strip()
+        summary = str(opt.get("concept_summary") or "").strip()
+        viral = str(opt.get("viral_point") or "").strip()
+        sources = (
+            opt.get("combined_sources")
+            if isinstance(opt.get("combined_sources"), dict)
+            else {}
+        )
+        lines.append(f"**案{oid}: {title}**")
+        if summary:
+            lines.append(summary)
+        if viral:
+            lines.append(f"バズ: {viral}")
+        trend_label = str(sources.get("trend_label") or "").strip()
+        mech_label = str(sources.get("mechanic_label") or "").strip()
+        if trend_label or mech_label:
+            lines.append(f"掛け合わせ: {trend_label} × {mech_label}")
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
+async def publish_theme_options(
+    channel: discord.TextChannel,
+    payload: dict,
+    *,
+    api_key: str,
+) -> None:
+    await channel.send(
+        "🎯 企画テーマ案です。会議に進む案を選ぶか、再検討／フリー入力／中止を選んでください。"
+    )
+    await _post_as_agent(
+        channel,
+        username="ヂャイアン(マーケ)",
+        avatar_url=_AGENT_AVATAR_URLS["marketing"],
+        content=format_theme_options_agent_message(payload),
+    )
+    options = payload.get("options") if isinstance(payload.get("options"), list) else []
+    view = ThemeOptionSelectView(
+        options=[o for o in options if isinstance(o, dict)],
+        api_key=api_key,
+        meeting_channel_id=channel.id,
+    )
+    await channel.send("どれで行く？", view=view)
+
+
+async def propose_theme_options_for_meeting(
+    *,
+    order_channel: discord.abc.Messageable,
+    cfg: Config,
+    previous_titles: Optional[list[str]] = None,
+    meeting_channel: Optional[discord.TextChannel] = None,
+    already_reserved: bool = False,
+) -> None:
+    channel = meeting_channel or await resolve_meeting_channel()
+    if channel is None:
+        await order_channel.send(
+            "⚠️ 企画検討チャンネルが見つかりません。MEETING_CHANNEL_ID の設定を確認してください。"
+        )
+        return
+
+    if not already_reserved:
+        reserved = await _try_reserve_meeting_channel(channel.id)
+        if not reserved:
+            await order_channel.send(
+                f"⏳ 企画検討はすでに進行中です。企画検討チャンネル <#{channel.id}> を確認してください。"
+            )
+            return
+        await order_channel.send(
+            f"企画検討チャンネル <#{channel.id}> でテーマ案を確認してください。"
+        )
+
+    await channel.send("🔄 ヂャイアンがトレンド×ゲーム性でテーマ案を作成中です…")
+    try:
+
+        def _run() -> dict:
+            proposer = ThemeProposer(gemini_api_key=cfg.GEMINI_API_KEY)
+            return proposer.generate(previous_titles=previous_titles or [])
+
+        payload = await asyncio.to_thread(_run)
+        await publish_theme_options(channel, payload, api_key=cfg.GEMINI_API_KEY)
+    except ThemeProposalError as exc:
+        await channel.send(f"[theme_proposal] 失敗しました: {exc}")
+        await _release_meeting_channel(channel.id)
+    except Exception as exc:
+        await channel.send(f"[theme_proposal] 失敗しました: {exc}")
+        await _release_meeting_channel(channel.id)
+
+
+class ThemeOptionSelectView(discord.ui.View):
+    def __init__(
+        self,
+        *,
+        options: list[dict],
+        api_key: str,
+        meeting_channel_id: int,
+    ):
+        super().__init__(timeout=900)
+        self.options = options
+        self.api_key = api_key
+        self.meeting_channel_id = meeting_channel_id
+        self._resolved = False
+        # True の間は View が会議チャンネル予約を保持（timeout / 中止で解放）
+        self._holds_reservation = True
+
+        for opt in options[:4]:
+            oid = int(opt.get("option_id") or 0)
+            button = discord.ui.Button(
+                label=f"案{oid}"[:80],
+                style=discord.ButtonStyle.primary,
+                custom_id=f"theme_option_{oid}",
+            )
+            button.callback = self._make_option_callback(opt)
+            self.add_item(button)
+
+        regen = discord.ui.Button(
+            label="もう一度検討",
+            style=discord.ButtonStyle.secondary,
+            custom_id="theme_option_regen",
+        )
+        regen.callback = self._on_regen
+        self.add_item(regen)
+
+        free_input = discord.ui.Button(
+            label="フリー入力",
+            style=discord.ButtonStyle.secondary,
+            custom_id="theme_option_free",
+        )
+        free_input.callback = self._on_free_input
+        self.add_item(free_input)
+
+        abort = discord.ui.Button(
+            label="中止",
+            style=discord.ButtonStyle.danger,
+            custom_id="theme_option_abort",
+        )
+        abort.callback = self._on_abort
+        self.add_item(abort)
+
+    def _disable_buttons(self) -> None:
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+
+    def _make_option_callback(self, option: dict):
+        async def _callback(interaction: discord.Interaction) -> None:
+            if self._resolved:
+                await interaction.response.send_message(
+                    "この選択はすでに処理済みです。", ephemeral=True
+                )
+                return
+            self._resolved = True
+            self._disable_buttons()
+            if interaction.message is not None:
+                await interaction.message.edit(view=self)
+
+            theme = build_meeting_theme_text(option)
+            title = str(option.get("title") or "選択案")
+            await interaction.response.send_message(
+                f"✅ 「{title}」で企画会議を開始します。",
+                ephemeral=False,
+            )
+            meeting_channel = await resolve_text_channel(self.meeting_channel_id)
+            order_channel = interaction.channel or meeting_channel
+            if meeting_channel is None or order_channel is None:
+                await interaction.followup.send("⚠️ チャンネルを解決できませんでした。")
+                await self._release_if_held()
+                self.stop()
+                return
+            self._holds_reservation = False
+            await start_meeting_from_theme(
+                theme,
+                order_channel=order_channel,
+                already_reserved=True,
+                meeting_channel=meeting_channel,
+            )
+            self.stop()
+
+        return _callback
+
+    async def _release_if_held(self) -> None:
+        if self._holds_reservation:
+            self._holds_reservation = False
+            await _release_meeting_channel(self.meeting_channel_id)
+
+    async def _on_regen(self, interaction: discord.Interaction) -> None:
+        if self._resolved:
+            await interaction.response.send_message(
+                "この選択はすでに処理済みです。", ephemeral=True
+            )
+            return
+        self._resolved = True
+        self._disable_buttons()
+        if interaction.message is not None:
+            await interaction.message.edit(view=self)
+
+        await interaction.response.send_message(
+            "🔁 了解。ヂャイアンにもう一度検討させます…",
+            ephemeral=False,
+        )
+        previous_titles = [
+            str(o.get("title") or "") for o in self.options if o.get("title")
+        ]
+        meeting_channel = await resolve_text_channel(self.meeting_channel_id)
+        if meeting_channel is None:
+            await interaction.followup.send("⚠️ 企画検討チャンネルが見つかりません。")
+            await self._release_if_held()
+            self.stop()
+            return
+        try:
+            cfg = _get_config_or_raise()
+        except Exception:
+            cfg = Config(
+                DISCORD_TOKEN="",
+                PRESIDENT_ORDER_CHANNEL_ID=0,
+                GEMINI_API_KEY=self.api_key,
+                MEETING_CHANNEL_ID=self.meeting_channel_id,
+                POST_MORTEM_CHANNEL_ID=0,
+                MARKET_RESEARCH_CHANNEL_ID=0,
+                PRESIDENT_MENTION="",
+            )
+        # 予約は次の提示 View に引き継ぐ
+        self._holds_reservation = False
+        await propose_theme_options_for_meeting(
+            order_channel=meeting_channel,
+            cfg=cfg,
+            previous_titles=previous_titles,
+            meeting_channel=meeting_channel,
+            already_reserved=True,
+        )
+        self.stop()
+
+    async def _on_free_input(self, interaction: discord.Interaction) -> None:
+        if self._resolved:
+            await interaction.response.send_message(
+                "この選択はすでに処理済みです。", ephemeral=True
+            )
+            return
+        self._resolved = True
+        self._disable_buttons()
+        if interaction.message is not None:
+            await interaction.message.edit(view=self)
+        await interaction.response.send_modal(
+            MeetingThemeModal(
+                already_reserved=True,
+                meeting_channel_id=self.meeting_channel_id,
+                parent_view=self,
+            )
+        )
+        # モーダルを閉じた場合は View の timeout で予約解放する（stop しない）
+
+    async def _on_abort(self, interaction: discord.Interaction) -> None:
+        if self._resolved:
+            await interaction.response.send_message(
+                "この選択はすでに処理済みです。", ephemeral=True
+            )
+            return
+        self._resolved = True
+        self._disable_buttons()
+        if interaction.message is not None:
+            await interaction.message.edit(view=self)
+        await interaction.response.send_message(
+            "🛑 企画会議を中止しました。",
+            ephemeral=False,
+        )
+        await self._release_if_held()
+        self.stop()
+
+    async def on_timeout(self) -> None:
+        await self._release_if_held()
+        self._disable_buttons()
+
+
 class MeetingThemeModal(discord.ui.Modal, title="企画会議のテーマ"):
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        already_reserved: bool = False,
+        meeting_channel_id: Optional[int] = None,
+        parent_view: Optional[discord.ui.View] = None,
+    ) -> None:
         super().__init__()
+        self.already_reserved = already_reserved
+        self.meeting_channel_id = meeting_channel_id
+        self.parent_view = parent_view
         self.theme_input = discord.ui.TextInput(
             label="テーマ",
             style=discord.TextStyle.paragraph,
@@ -548,6 +1061,12 @@ class MeetingThemeModal(discord.ui.Modal, title="企画会議のテーマ"):
         )
         self.add_item(self.theme_input)
 
+    def _stop_parent(self) -> None:
+        if self.parent_view is not None:
+            if hasattr(self.parent_view, "_holds_reservation"):
+                self.parent_view._holds_reservation = False
+            self.parent_view.stop()
+
     async def on_submit(self, interaction: discord.Interaction) -> None:
         theme = self.theme_input.value.strip()
         if not theme:
@@ -555,24 +1074,40 @@ class MeetingThemeModal(discord.ui.Modal, title="企画会議のテーマ"):
                 "⚠️ テーマが空です。もう一度やり直してください。",
                 ephemeral=False,
             )
+            if self.already_reserved and self.meeting_channel_id is not None:
+                await _release_meeting_channel(self.meeting_channel_id)
+            self._stop_parent()
             return
 
-        meeting_channel = await resolve_meeting_channel()
+        meeting_channel = None
+        if self.meeting_channel_id is not None:
+            meeting_channel = await resolve_text_channel(self.meeting_channel_id)
+        if meeting_channel is None:
+            meeting_channel = await resolve_meeting_channel()
         if meeting_channel is None:
             await interaction.response.send_message(
                 "⚠️ 企画検討チャンネルが見つかりません。MEETING_CHANNEL_ID の設定を確認してください。",
                 ephemeral=False,
             )
+            if self.already_reserved and self.meeting_channel_id is not None:
+                await _release_meeting_channel(self.meeting_channel_id)
+            self._stop_parent()
             return
 
         await interaction.response.send_message(
             f"企画検討チャンネル <#{meeting_channel.id}> で開始します。",
             ephemeral=False,
         )
-        channel = interaction.channel
-        if channel is None:
-            return
-        await start_meeting_from_theme(theme, order_channel=channel)
+        order_channel = interaction.channel or meeting_channel
+        try:
+            await start_meeting_from_theme(
+                theme,
+                order_channel=order_channel,
+                already_reserved=self.already_reserved,
+                meeting_channel=meeting_channel,
+            )
+        finally:
+            self._stop_parent()
 
 
 class ProcessSelectView(discord.ui.View):
@@ -595,16 +1130,31 @@ class ProcessSelectView(discord.ui.View):
         post_mortem_button.callback = self._on_post_mortem
         self.add_item(post_mortem_button)
 
+        market_research_button = discord.ui.Button(
+            label="市場調査",
+            style=discord.ButtonStyle.success,
+            custom_id="process_select_market_research",
+        )
+        market_research_button.callback = self._on_market_research
+        self.add_item(market_research_button)
+
     def _disable_buttons(self) -> None:
         for item in self.children:
             if isinstance(item, discord.ui.Button):
                 item.disabled = True
 
     async def _on_meeting(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_modal(MeetingThemeModal())
         self._disable_buttons()
-        if interaction.message is not None:
-            await interaction.message.edit(view=self)
+        await interaction.response.edit_message(view=self)
+
+        cfg = _get_config_or_raise()
+        channel = interaction.channel
+        if channel is None:
+            await interaction.followup.send("⚠️ チャンネルを解決できませんでした。")
+            self.stop()
+            return
+
+        await propose_theme_options_for_meeting(order_channel=channel, cfg=cfg)
         self.stop()
 
     async def _on_post_mortem(self, interaction: discord.Interaction) -> None:
@@ -619,6 +1169,20 @@ class ProcessSelectView(discord.ui.View):
             return
 
         await propose_post_mortem(order_channel=channel, cfg=cfg)
+        self.stop()
+
+    async def _on_market_research(self, interaction: discord.Interaction) -> None:
+        self._disable_buttons()
+        await interaction.response.edit_message(view=self)
+
+        cfg = _get_config_or_raise()
+        channel = interaction.channel
+        if channel is None:
+            await interaction.followup.send("⚠️ チャンネルを解決できませんでした。")
+            self.stop()
+            return
+
+        await propose_market_research(order_channel=channel, cfg=cfg)
         self.stop()
 
 
