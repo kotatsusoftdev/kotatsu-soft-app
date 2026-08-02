@@ -13,6 +13,9 @@ game-projects/**/dist/
 shared/logs/
 logs/*.log
 
+# Local free-asset library binaries (catalog/ATTRIBUTIONS stay tracked)
+asset-presets/files/
+
 # OS files
 .DS_Store
 Thumbs.db

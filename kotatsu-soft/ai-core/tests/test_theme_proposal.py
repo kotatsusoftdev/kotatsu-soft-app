@@ -6,9 +6,14 @@ from pathlib import Path
 import pytest
 
 from theme_proposal import (
+    APPROACH_DIRECT,
+    APPROACH_REMAP,
     ThemeProposalError,
     ThemeProposer,
     build_meeting_theme_text,
+    extract_avoid_pairs,
+    normalize_approach_type,
+    option_source_pair,
 )
 
 
@@ -25,6 +30,10 @@ def _sample_trends() -> dict:
                     "original": "今日ビジュいいじゃん",
                     "abstracted": "全肯定セルフ褒め",
                 },
+                "context": {
+                    "summary": "自撮りで自分を全肯定する短尺",
+                    "emotional_trigger": "自己肯定と誇張",
+                },
             },
             {
                 "trend_id": "trend_b",
@@ -34,6 +43,10 @@ def _sample_trends() -> dict:
                     "original": "謎の法則",
                     "abstracted": "意味不明ルール信仰",
                 },
+                "context": {
+                    "summary": "根拠薄弱な法則を信じ込む",
+                    "emotional_trigger": "理不尽な納得",
+                },
             },
             {
                 "trend_id": "trend_c",
@@ -42,6 +55,10 @@ def _sample_trends() -> dict:
                 "keyword": {
                     "original": "崩壊チャレンジ",
                     "abstracted": "意図的な失敗自慢",
+                },
+                "context": {
+                    "summary": "わざと崩して笑いを取る",
+                    "emotional_trigger": "失敗の高揚",
                 },
             },
         ],
@@ -107,12 +124,19 @@ def test_generate_mock_writes_options(tmp_path: Path) -> None:
     for opt in payload["options"]:
         assert opt["title"]
         assert opt["concept_summary"]
+        assert opt["approach_type"] in {APPROACH_DIRECT, APPROACH_REMAP}
+        assert opt["design_intent"]
+        assert opt["synergy_reason"]
         assert opt["viral_point"]
         sources = opt["combined_sources"]
         assert sources["trend_id"]
         assert sources["mechanic_id"]
         assert sources["trend_label"]
         assert sources["mechanic_label"]
+    assert {o["approach_type"] for o in payload["options"]} == {
+        APPROACH_DIRECT,
+        APPROACH_REMAP,
+    }
 
 
 def test_generate_raises_without_trends(tmp_path: Path) -> None:
@@ -135,21 +159,160 @@ def test_generate_raises_without_mechanics(tmp_path: Path) -> None:
         proposer.generate()
 
 
-def test_generate_with_previous_titles_avoids_same(tmp_path: Path) -> None:
+def test_generate_with_previous_options_avoids_same_pairs(tmp_path: Path) -> None:
     _write_research(tmp_path)
     proposer = ThemeProposer(mock=True, research_dir=tmp_path)
     first = proposer.generate()
-    titles = [o["title"] for o in first["options"]]
-    second = proposer.generate(previous_titles=titles)
-    second_titles = [o["title"] for o in second["options"]]
-    assert second_titles != titles
-    assert any("改" in t or "別解" in t for t in second_titles)
+    first_pairs = extract_avoid_pairs(first["options"])
+    second = proposer.generate(previous_options=first["options"])
+    second_pairs = {option_source_pair(o) for o in second["options"]}
+    assert second_pairs.isdisjoint(first_pairs)
+    assert any("改" in str(o.get("title") or "") or "別解" in str(o.get("title") or "") for o in second["options"])
+
+
+def test_extract_avoid_pairs() -> None:
+    pairs = extract_avoid_pairs(
+        [
+            {
+                "combined_sources": {
+                    "trend_id": "trend_a",
+                    "mechanic_id": "mech_a",
+                }
+            },
+            {"title": "no sources"},
+        ]
+    )
+    assert pairs == {("trend_a", "mech_a")}
+
+
+def test_normalize_approach_type() -> None:
+    assert normalize_approach_type("元ネタ直球") == APPROACH_DIRECT
+    assert normalize_approach_type("直球") == APPROACH_DIRECT
+    assert normalize_approach_type("世界観置換") == APPROACH_REMAP
+    assert normalize_approach_type("置換案") == APPROACH_REMAP
+    assert normalize_approach_type("不明") is None
+
+
+def _full_option(
+    *,
+    option_id: int,
+    title: str,
+    trend_id: str,
+    mechanic_id: str,
+    approach_type: str = APPROACH_DIRECT,
+    **extra: object,
+) -> dict:
+    base = {
+        "option_id": option_id,
+        "title": title,
+        "concept_summary": f"{title}の要約",
+        "combined_sources": {
+            "trend_id": trend_id,
+            "mechanic_id": mechanic_id,
+        },
+        "approach_type": approach_type,
+        "design_intent": f"{title}の狙い",
+        "synergy_reason": f"{title}のシナジー",
+        "viral_point": f"{title}のバズ",
+    }
+    base.update(extra)
+    return base
+
+
+def test_parse_filters_forbidden_pairs_and_retries(tmp_path: Path) -> None:
+    _write_research(tmp_path)
+    calls = {"n": 0}
+
+    def fake_llm(prompt: str) -> str:
+        calls["n"] += 1
+        assert "禁止ペア" in prompt
+        assert "trend_a × mech_a" in prompt
+        if calls["n"] == 1:
+            # 禁止ペアばかり → フィルタ後不足 → 再試行
+            return json.dumps(
+                {
+                    "options": [
+                        _full_option(
+                            option_id=1,
+                            title="重複A",
+                            trend_id="trend_a",
+                            mechanic_id="mech_a",
+                        ),
+                        _full_option(
+                            option_id=2,
+                            title="重複B",
+                            trend_id="trend_a",
+                            mechanic_id="mech_a",
+                        ),
+                        _full_option(
+                            option_id=3,
+                            title="重複C",
+                            trend_id="trend_a",
+                            mechanic_id="mech_a",
+                        ),
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        return json.dumps(
+            {
+                "options": [
+                    _full_option(
+                        option_id=1,
+                        title="新案1",
+                        trend_id="trend_b",
+                        mechanic_id="mech_b",
+                        approach_type=APPROACH_REMAP,
+                    ),
+                    _full_option(
+                        option_id=2,
+                        title="新案2",
+                        trend_id="trend_c",
+                        mechanic_id="mech_c",
+                    ),
+                    _full_option(
+                        option_id=3,
+                        title="新案3",
+                        trend_id="trend_b",
+                        mechanic_id="mech_c",
+                        approach_type=APPROACH_REMAP,
+                    ),
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    proposer = ThemeProposer(
+        mock=False, research_dir=tmp_path, llm_callable=fake_llm
+    )
+    previous = [
+        {
+            "title": "前回",
+            "combined_sources": {
+                "trend_id": "trend_a",
+                "mechanic_id": "mech_a",
+                "trend_label": "全肯定セルフ褒め",
+                "mechanic_label": "自撮りタワー",
+            },
+        }
+    ]
+    payload = proposer.generate(previous_options=previous)
+    assert calls["n"] == 2
+    pairs = {option_source_pair(o) for o in payload["options"]}
+    assert ("trend_a", "mech_a") not in pairs
+    assert len(payload["options"]) >= 3
 
 
 def test_parse_options_from_llm(tmp_path: Path) -> None:
     _write_research(tmp_path)
 
     def fake_llm(_prompt: str) -> str:
+        assert "synergy_reason" in _prompt
+        assert "approach_type" in _prompt
+        assert "design_intent" in _prompt
+        assert "安易なガッチャンコ" in _prompt
+        assert "世界観置換" in _prompt
+        assert "爆笑" in _prompt
         return json.dumps(
             {
                 "options": [
@@ -163,6 +326,9 @@ def test_parse_options_from_llm(tmp_path: Path) -> None:
                             "trend_label": "全肯定セルフ褒め",
                             "mechanic_label": "自撮りタワー",
                         },
+                        "approach_type": "直球",
+                        "design_intent": "絵面が完成しているので直球",
+                        "synergy_reason": "自己肯定を積む操作で増幅",
                         "viral_point": "映え",
                     },
                     {
@@ -173,6 +339,9 @@ def test_parse_options_from_llm(tmp_path: Path) -> None:
                             "trend_id": "trend_b",
                             "mechanic_id": "mech_b",
                         },
+                        "approach_type": APPROACH_REMAP,
+                        "design_intent": "置換の方がカオス",
+                        "synergy_reason": "理不尽ルールを回す操作で再現",
                         "viral_point": "大喜利",
                     },
                     {
@@ -183,6 +352,9 @@ def test_parse_options_from_llm(tmp_path: Path) -> None:
                             "trend_id": "trend_c",
                             "mechanic_id": "mech_c",
                         },
+                        "approach_type": APPROACH_DIRECT,
+                        "design_intent": "失敗自慢を直球で",
+                        "synergy_reason": "失敗の高揚を連打で加速",
                         "viral_point": "崩壊",
                     },
                 ]
@@ -196,6 +368,59 @@ def test_parse_options_from_llm(tmp_path: Path) -> None:
     payload = proposer.generate()
     assert len(payload["options"]) == 3
     assert payload["options"][1]["combined_sources"]["trend_label"] == "意味不明ルール信仰"
+    assert payload["options"][0]["synergy_reason"] == "自己肯定を積む操作で増幅"
+    assert payload["options"][0]["approach_type"] == APPROACH_DIRECT
+    assert payload["options"][1]["approach_type"] == APPROACH_REMAP
+
+
+def test_parse_skips_options_without_required_fields(tmp_path: Path) -> None:
+    _write_research(tmp_path)
+
+    def fake_llm(_prompt: str) -> str:
+        return json.dumps(
+            {
+                "options": [
+                    {
+                        "option_id": 1,
+                        "title": "欠落案",
+                        "concept_summary": "要約",
+                        "combined_sources": {
+                            "trend_id": "trend_a",
+                            "mechanic_id": "mech_a",
+                        },
+                        "viral_point": "映え",
+                    },
+                    _full_option(
+                        option_id=2,
+                        title="案B",
+                        trend_id="trend_b",
+                        mechanic_id="mech_b",
+                    ),
+                    _full_option(
+                        option_id=3,
+                        title="案C",
+                        trend_id="trend_c",
+                        mechanic_id="mech_c",
+                        approach_type=APPROACH_REMAP,
+                    ),
+                    _full_option(
+                        option_id=4,
+                        title="案D",
+                        trend_id="trend_a",
+                        mechanic_id="mech_c",
+                    ),
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    proposer = ThemeProposer(
+        mock=False, research_dir=tmp_path, llm_callable=fake_llm
+    )
+    payload = proposer.generate()
+    titles = [o["title"] for o in payload["options"]]
+    assert "欠落案" not in titles
+    assert len(payload["options"]) == 3
 
 
 def test_build_meeting_theme_text() -> None:
@@ -203,6 +428,9 @@ def test_build_meeting_theme_text() -> None:
         {
             "title": "テスト案",
             "concept_summary": "要約",
+            "approach_type": APPROACH_REMAP,
+            "design_intent": "宮廷料理人に置換した方がカオス",
+            "synergy_reason": "焦りを滑る操作で再現",
             "viral_point": "バズ",
             "combined_sources": {
                 "trend_label": "トレンド",
@@ -212,6 +440,11 @@ def test_build_meeting_theme_text() -> None:
     )
     assert "テスト案" in text
     assert "要約" in text
+    assert "アプローチ: 世界観置換" in text
+    assert "アプローチの狙い" in text
+    assert "宮廷料理人に置換した方がカオス" in text
+    assert "シナジー理由" in text
+    assert "焦りを滑る操作で再現" in text
     assert "バズ" in text
     assert "トレンド" in text
     assert "メカニクス" in text

@@ -488,20 +488,80 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
-def _extract_json_object(text: str) -> Any:
+def _strip_json_fences(text: str) -> str:
     raw = (text or "").strip()
-    if not raw:
-        raise MarketResearchError("LLM response is empty")
     if raw.startswith("```"):
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
+    return raw.strip()
+
+
+def _remove_trailing_commas(text: str) -> str:
+    return re.sub(r",(\s*[}\]])", r"\1", text)
+
+
+def _json_error_snippet(text: str, exc: json.JSONDecodeError, *, radius: int = 60) -> str:
+    pos = max(0, min(exc.pos or 0, len(text)))
+    start = max(0, pos - radius)
+    end = min(len(text), pos + radius)
+    snippet = text[start:end].replace("\n", "\\n")
+    marker_at = pos - start
+    return f"...{snippet[:marker_at]}<<<HERE>>>{snippet[marker_at:]}..."
+
+
+def _try_load_json(text: str) -> Any:
+    return json.loads(text)
+
+
+def _extract_json_object(text: str) -> Any:
+    """LLM応答から JSON を取り出す。一般的な崩れは修復して再試行する。"""
+    raw = _strip_json_fences(text)
+    if not raw:
+        raise MarketResearchError("LLM response is empty")
+
+    candidates: list[str] = [raw]
+    match = re.search(r"\{[\s\S]*\}|\[[\s\S]*\]", raw)
+    if match:
+        extracted = match.group(0)
+        if extracted not in candidates:
+            candidates.append(extracted)
+
+    errors: list[json.JSONDecodeError] = []
+    for candidate in candidates:
+        for variant in (candidate, _remove_trailing_commas(candidate)):
+            try:
+                return _try_load_json(variant)
+            except json.JSONDecodeError as exc:
+                errors.append(exc)
+
+    # 文字列内の未エスケープ引用符など、json-repair で直せる崩れ向け
     try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        match = re.search(r"\{[\s\S]*\}|\[[\s\S]*\]", raw)
-        if not match:
-            raise MarketResearchError("LLM response is not valid JSON") from None
-        return json.loads(match.group(0))
+        from json_repair import repair_json
+    except ImportError:
+        repair_json = None  # type: ignore[assignment]
+
+    if repair_json is not None:
+        for candidate in candidates:
+            try:
+                repaired = repair_json(candidate, return_objects=True)
+            except Exception:  # noqa: BLE001
+                continue
+            if isinstance(repaired, (dict, list)):
+                return repaired
+            if isinstance(repaired, str):
+                try:
+                    return _try_load_json(repaired)
+                except json.JSONDecodeError as exc:
+                    errors.append(exc)
+
+    err = errors[-1] if errors else None
+    if err is None:
+        raise MarketResearchError("LLM response is not valid JSON")
+    snippet = _json_error_snippet(raw, err)
+    raise MarketResearchError(
+        f"LLM response is not valid JSON: {err.msg} "
+        f"(line {err.lineno} column {err.colno}; {snippet})"
+    ) from err
 
 
 class MarketResearcher:
@@ -922,8 +982,7 @@ class MarketResearcher:
                 keywords, contexts, date_stamp, sources=source_map
             )
 
-        raw = self._call_llm(prompt)
-        parsed = _extract_json_object(raw)
+        parsed = self._call_llm_json(prompt, label="trends")
         items = parsed.get("trends") if isinstance(parsed, dict) else parsed
         if not isinstance(items, list):
             raise MarketResearchError("LLM trends payload must be a list or {trends: [...]}")
@@ -1298,8 +1357,7 @@ class MarketResearcher:
             return self._mock_normalized_mechanics(games)
 
         prompt = self._build_mechanics_prompt(games)
-        raw = self._call_llm(prompt)
-        parsed = _extract_json_object(raw)
+        parsed = self._call_llm_json(prompt, label="mechanics")
         items = parsed.get("mechanics") if isinstance(parsed, dict) else parsed
         if not isinstance(items, list):
             raise MarketResearchError(
@@ -1405,7 +1463,9 @@ class MarketResearcher:
             "実例ならではのネタを削ぎ落とすな。\n"
             "- dedupe_key は英小文字とアンダースコア。"
             "モチーフ差が分かる語（例: sushi / cat_flip）を含めてよい。\n"
-            "- source_title は入力の title をそのまま使う。\n\n"
+            "- source_title は入力の title をそのまま使う。\n"
+            "- 文字列内のダブルクォートは必ず \\\" にエスケープすること。"
+            "会話引用は「」を使え。\n\n"
             "必ず次の JSON だけを返してください（説明文禁止）:\n"
             "{\n"
             '  "mechanics": [\n'
@@ -1534,6 +1594,30 @@ class MarketResearcher:
     # ------------------------------------------------------------------
     # LLM
     # ------------------------------------------------------------------
+
+    def _call_llm_json(self, prompt: str, *, label: str) -> Any:
+        """LLM を呼び JSON を返す。パース失敗時は1回だけ修復プロンプトで再試行する。"""
+        raw = self._call_llm(prompt)
+        try:
+            return _extract_json_object(raw)
+        except MarketResearchError as first_exc:
+            repair_prompt = (
+                f"前回の {label} 応答は不正な JSON でした。"
+                "次のエラーを踏まえ、有効な JSON オブジェクトだけを返してください。"
+                "説明文やコードフェンスは禁止です。\n"
+                f"エラー: {first_exc}\n\n"
+                "元の指示:\n"
+                f"{prompt}\n\n"
+                "壊れた応答:\n"
+                f"{raw[:8000]}"
+            )
+            raw_retry = self._call_llm(repair_prompt)
+            try:
+                return _extract_json_object(raw_retry)
+            except MarketResearchError as second_exc:
+                raise MarketResearchError(
+                    f"{label}: JSON parse failed after retry: {second_exc}"
+                ) from second_exc
 
     def _call_llm(self, prompt: str) -> str:
         if self.llm_callable is not None:

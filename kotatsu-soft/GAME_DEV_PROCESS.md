@@ -10,13 +10,13 @@ KOTATSU-SOFT 全体のブラウザゲーム開発プロセスの正本です。�
 
 ### 目的
 
-企画会議から公開・学習までのライフサイクル、命名規約、成果物の置き場、責任分界を定義し、再現可能なゲーム開発プロセスを維持する。
+市場調査から企画会議・公開・学習までのライフサイクル、命名規約、成果物の置き場、責任分界を定義し、再現可能なゲーム開発プロセスを維持する。
 
 ### 適用範囲
 
 | 対象 | 非対象 |
 |------|--------|
-| Discord 企画会議〜仕様生成 | 個別ゲームのゲームデザイン詳細 |
+| Discord 市場調査・テーマ案・企画会議〜仕様生成 | 個別ゲームのゲームデザイン詳細 |
 | ゲーム実装・配置・ポータル反映 | ai-core の内部実装詳細（必要時のみパス参照） |
 | GitHub Pages 公開 | インフラ以外のマーケティング運用全般 |
 | プレイテスト記録・反省会・教訓更新 | |
@@ -27,18 +27,20 @@ KOTATSU-SOFT 全体のブラウザゲーム開発プロセスの正本です。�
 
 ```
 kotatsu-soft/
-├── ai-core/           # Discord Bot・会議・仕様生成・反省会・アバター資産
+├── ai-core/           # Discord Bot・市場調査・会議・仕様生成・反省会・アバター資産
 ├── game-projects/     # ポータル・社員紹介・各ゲーム（静的 HTML）
-├── shared/            # 仕様・会議ログ・レビュー・レジストリ・運用ログ
+├── asset-presets/     # ゲーム用画像プリセット（実体はローカルのみ。カタログは Git 管理）
+├── shared/            # 仕様・会議ログ・調査JSON・レビュー・レジストリ・運用ログ
 ├── README.md
 └── GAME_DEV_PROCESS.md  # 本設計書
 ```
 
 | コンポーネント | 役割 |
 |----------------|------|
-| `ai-core/` | Discord Bot。企画会議のオーケストレーション、Go 後の仕様書生成、反省会による教訓更新。アバターは `ai-core/assets/avatars/` |
+| `ai-core/` | Discord Bot。市場調査・テーマ案生成・企画会議のオーケストレーション、Go 後の仕様書生成、反省会による教訓更新。アバターは `ai-core/assets/avatars/` |
 | `game-projects/` | 公式ポータル（`index.html`）、社員紹介（`staff.html`）、各ゲーム本体。ビルドなしの静的配信 |
-| `shared/` | 仕様書・会議ログ・プレイテストレビュー・仕様↔ゲーム紐づけレジストリ・Bot 運用ログ（`logs/`） |
+| `asset-presets/` | フリー素材などの画像プリセット。実体は `files/`（Git 非追跡）。選択用メタデータは `catalog.json`。詳細は §7.5 |
+| `shared/` | 仕様書・会議ログ・市場調査 JSON・プレイテストレビュー・仕様↔ゲーム紐づけレジストリ・Bot 運用ログ（`logs/`） |
 | GitHub Pages | `main` への push で `game-projects` と共有成果物の一部を公開（リポジトリルートの `.github/workflows/game-pages-deploy.yml`） |
 
 Bot 起動・依存関係・環境変数は [README.md](./README.md) の「ai-core セットアップ」を参照。
@@ -50,8 +52,14 @@ Bot 起動・依存関係・環境変数は [README.md](./README.md) の「ai-co
 ```mermaid
 flowchart LR
   order[Discord社長命令] --> choose{プロセス選択}
-  choose -->|企画会議| themeModal[テーマ入力]
-  themeModal --> meeting[企画会議]
+  choose -->|市場調査| research[市場調査]
+  research --> researchOut[調査JSON更新]
+  choose -->|企画会議| themeOpts[テーマ案生成]
+  researchOut -.-> themeOpts
+  themeOpts --> pick{案選択/再検討/フリー入力/中止}
+  pick -->|案またはフリー入力| meeting[企画会議]
+  pick -->|再検討| themeOpts
+  pick -->|中止| abortTheme[終了]
   meeting --> goNoGo{社長Go/NoGo/中止}
   goNoGo -->|NoGo| meeting
   goNoGo -->|Go| spec[仕様書生成]
@@ -68,7 +76,9 @@ flowchart LR
 
 | フェーズ | 概要 | 主な成果物 / 入口 |
 |----------|------|-------------------|
-| 企画会議 | 社長命令でプロセス選択 → テーマ入力 → 企画検討チャンネルで AI 社員が議論 | `shared/meeting/meeting_{stem}.jsonl` |
+| 市場調査 | 社長命令でプロセス選択 → 市場調査チャンネルでヂャイアンがトレンド／メカニクスを収集 | `shared/research/latest_trends.json`, `shared/research/mechanics_db.json` |
+| テーマ案 | 企画会議開始時に調査 JSON から 3〜4 案を提示。案選択・再検討・フリー入力・中止 | `shared/research/latest_theme_options.json` |
+| 企画会議 | 選んだテーマ（またはフリー入力）で AI 社員が議論 | `shared/meeting/meeting_{stem}.jsonl` |
 | 社長判定 | Go / NoGo / 中止。NoGo は修正方針を入れて再会議（新 `artifact_stem`）。中止は仕様生成・再会議なしで終了 | — |
 | 仕様生成 | Go 後に仕様書を自動出力しレジストリへ登録 | `shared/specs/spec_{stem}.md`, `shared/specs/spec_game_links.json` |
 | 実装 | 外部エンジン禁止。単一 HTML を原則 | `game-projects/NNN_slug/src/index.html` |
@@ -77,11 +87,13 @@ flowchart LR
 | プレイテスト | 指摘と修正履歴をレビューに記録 | `shared/review/review_{stem}.md` |
 | 反省会 | 成果物から教訓を更新し、次回会議へ反映 | `ai-core/src/agents/*/lessons_learned.yaml` |
 
+企画会議は調査 JSON（トレンドとメカニクス）が揃っていることが前提。無い場合は会議を始めず、先に市場調査するよう案内する。
+
 NoGo 再会議は毎回新しい `artifact_stem` を発行する。Go した stem だけが仕様・レジストリ・レビュー・反省会の正本になる（§5 / §8）。
 
 ---
 
-## 4. 企画会議
+## 4. 市場調査と企画会議
 
 ### 4.1 登場人物
 
@@ -89,7 +101,7 @@ NoGo 再会議は毎回新しい `artifact_stem` を発行する。Go した ste
 |--------|------|----------|
 | すずかちゃん | `pm` | 面白さと実現性の検証、不要要素の削減、最終1案への収束 |
 | スゴ杉くん | `dev` | 技術的実現性、難所の見極め、面白さが伝わる実装の落とし所 |
-| ヂャイアン | `marketing` | 初見インパクト・拡散のフック、制約を武器にした見せ方 |
+| ヂャイアン | `marketing` | 市場調査・テーマ案生成、初見インパクト・拡散のフック、制約を武器にした見せ方 |
 
 設定の詳細は `ai-core/src/agents/*/config.yaml`（社員紹介用の `public_profile` 含む）。共有のスコープ・技術制約は §4.2 のグランドルールが正本。
 
@@ -108,24 +120,86 @@ NoGo 再会議は毎回新しい `artifact_stem` を発行する。Go した ste
 2. 必要なら本設計書の関連節・改定履歴を追記する
 3. Bot を再起動して反映する
 
-### 4.3 開始条件
+### 4.3 市場調査
+
+ヂャイアン相当の処理で、トレンドとゲームメカニクスを収集する独立プロセス。実装: `ai-core/src/market_research.py`。
+
+| 成果物 | 更新方針 | 内容 |
+|--------|----------|------|
+| `shared/research/latest_trends.json` | **毎回上書き** | Yahoo Realtime / Togetter / Tavily（TikTok 寄り）→ 政治・硬派ニュース除外・ミーム優先 → Gemini で抽象化 |
+| `shared/research/mechanics_db.json` | **蓄積（dedupe）** | unityroom 人気タイトルから 2D／ブラウザ実装可能なメカニクスを正規化して追記 |
+
+開始条件:
 
 1. Discord の社長命令チャンネル（`PRESIDENT_ORDER_CHANNEL_ID`）に何かメッセージを投稿する
-2. Bot が「企画会議 / 反省会」のプロセス選択を返す
-3. **企画会議** を選び、Modal にテーマを入力する
-4. Bot が企画検討チャンネル（`MEETING_CHANNEL_ID`）で会議を開始する（途中経過・最終提案・Go/NoGo/中止 も同チャンネル）
+2. Bot が「企画会議 / 反省会 / 市場調査」のプロセス選択を返す
+3. **市場調査** を選ぶ
+4. 市場調査チャンネル（`MARKET_RESEARCH_CHANNEL_ID`）で確認 UI → `はじめる` → 実行中表示 → ヂャイアン名義で概要報告
+
+CLI（任意）:
+
+```bash
+cd kotatsu-soft/ai-core
+python -m src.market_research
+# モック: python -m src.market_research --mock
+```
+
+環境変数:
+
+- `GEMINI_API_KEY` … 抽象化・正規化に使用（Bot 必須）
+- `TAVILY_API_KEY` … TikTok 寄りトレンド収集用（Bot 起動の必須ではない。未設定時は当該ソースをスキップ）
+
+Pages には同梱しない（リポジトリ内の運用成果物）。
+
+### 4.4 テーマ案選択
+
+企画会議を選ぶと、まず調査 JSON からテーマ案を生成する。実装: `ai-core/src/theme_proposal.py`。
+
+| 項目 | 内容 |
+|------|------|
+| 入力 | `latest_trends.json` × `mechanics_db.json`（どちらか空ならエラー。先に市場調査） |
+| 出力 | 3〜4 件の案。`shared/research/latest_theme_options.json` に上書き保存 |
+| 案の型 | `元ネタ直球` / `世界観置換` |
+| 提示場所 | 企画検討チャンネル（`MEETING_CHANNEL_ID`）。ヂャイアン名義で導入＋各案を投稿したあと選択 UI |
+
+社長の操作:
+
+| 操作 | 結果 |
+|------|------|
+| **案を選ぶ** | タイトル・コンセプト・シナジー等を会議テーマ文字列化し、企画会議を開始 |
+| **もう一度検討** | 過去案を avoid しつつ再生成（同チャンネルで再提示） |
+| **フリー入力** | Modal に任意テーマを入力して会議開始（調査 JSON は依然として存在必須） |
+| **中止** | 会議を開始せず終了 |
+
+CLI（任意）:
+
+```bash
+cd kotatsu-soft/ai-core
+python -m src.theme_proposal
+# モック: python -m src.theme_proposal --mock
+```
+
+### 4.5 開始条件（プロセス選択）
+
+1. Discord の社長命令チャンネル（`PRESIDENT_ORDER_CHANNEL_ID`）に何かメッセージを投稿する
+2. Bot が「企画会議 / 反省会 / 市場調査」のプロセス選択を返す
+3. **企画会議** を選ぶ → 企画検討チャンネルでテーマ案 UI（§4.4）→ 案選択またはフリー入力で会議開始
+4. 途中経過・最終提案・Go/NoGo/中止 は企画検討チャンネルに出る
 
 チャンネル役割:
 
 | チャンネル | 役割 |
 |------------|------|
-| 社長命令（`PRESIDENT_ORDER_CHANNEL_ID`） | プロセス選択と開始入力（テーマ Modal）。短い誘導のみ |
-| 企画検討（`MEETING_CHANNEL_ID`） | 企画会議の途中経過・最終提案・Go/NoGo/中止 |
+| 社長命令（`PRESIDENT_ORDER_CHANNEL_ID`） | プロセス選択と短い誘導のみ。経過・結果は出さない |
+| 企画検討（`MEETING_CHANNEL_ID`） | テーマ案提示・選択、企画会議の途中経過・最終提案・Go/NoGo/中止 |
+| 市場調査（`MARKET_RESEARCH_CHANNEL_ID`） | 市場調査の確認 UI・実行中表示・結果概要 |
 | 反省会（`POST_MORTEM_CHANNEL_ID`） | 反省会の確認 UI・実行中表示・教訓結果 |
 
 環境変数の置き方は [README.md](./README.md) を参照。
 
-### 4.4 ターン位相
+会議チャンネルは同時 1 本（予約ロック）。市場調査・反省会もそれぞれ実行中ロックがある。
+
+### 4.6 ターン位相
 
 最大おおよそ 10 ターン。ターン番号に応じて位相が切り替わる（実装: `ai-core/src/orchestrator.py` / 表示名: `ai-core/src/phase_labels.py`）。
 
@@ -137,7 +211,9 @@ NoGo 再会議は毎回新しい `artifact_stem` を発行する。Go した ste
 
 PM が `FINISH_FOR_PRESIDENT` を選ぶと社長判定へ進む。早期終了のガードやターン上限時の強制提出はオーケストレータが制御する。監査ログは `shared/logs/meeting_turn_audit.jsonl` に追記される。
 
-### 4.5 成果物
+会議時の system instruction にはグランドルール（§4.2）と各ロールの教訓（§12）が自動注入される（箇条書きの読み上げはせず、原則として発言に反映する）。
+
+### 4.7 成果物
 
 会議ログは `artifact_stem` 付きで保存される。
 
@@ -146,7 +222,7 @@ PM が `FINISH_FOR_PRESIDENT` を選ぶと社長判定へ進む。早期終了�
 
 公開時は Pages 成果物に同梱され、`shared/meeting.html` から閲覧できる。
 
-### 4.6 運用ログ（Pages 非公開）
+### 4.8 運用ログ（Pages 非公開）
 
 Bot が書き込む運用ログ。GitHub Pages には同梱しない。
 
@@ -199,6 +275,7 @@ Go 直後のメッセージ例（運用上の目印）: 仕様書の自動出力
 - 外部ゲームエンジン（Phaser / Three.js 等）は使わない
 - HTML5 Canvas + 素の JavaScript + Web Audio API
 - 原則として **単一の `index.html`**（CSS / JS はインライン）
+- 例外: プリセットから **採用した画像のみ** を同ゲームの `assets/` に置き、`index.html` から相対参照してよい（エンジン追加はしない）
 - ビルドツールやパッケージマネージャによるゲームビルドは行わない
 - スコープ・技術スタックの上限は `shared/meeting/grand_rules.yaml` に従う
 
@@ -214,6 +291,7 @@ game-projects/
 │   ├── stats.js               # ポータル／ゲーム共用の計測クライアント
 │   └── storage.js             # ログイン不要のローカルセーブヘルパー
 └── {NNN}_{slug}/
+    ├── assets/                # 当該ゲームが採用した画像のみ（任意）
     └── src/
         └── index.html         # ゲーム本体
 ```
@@ -262,6 +340,39 @@ KotatsuStorage.set("your_game_id", "highScore", best);
 
 `gameId` は統計連携と同じスラッグと一致させる。private モードや容量超過でも例外を外へ出さない（呼び出し側は戻り値で判定する）。
 
+### 7.5 画像プリセット
+
+フリー素材など、ゲームで使い回す画像プリセットは `asset-presets/` に置く。運用詳細は [`asset-presets/README.md`](./asset-presets/README.md)。
+
+```
+asset-presets/
+├── README.md
+├── ATTRIBUTIONS.md     # 出典・ライセンス一覧（コミット可）
+├── catalog.json        # AI / 人手選択用メタデータ（コミット可）
+└── files/              # 素材実体（.gitignore。公開しない）
+    ├── characters/
+    ├── backgrounds/
+    ├── ui/
+    └── effects/
+```
+
+| 置き場 | 用途 | Git |
+|--------|------|-----|
+| `asset-presets/files/` | ダウンロードしたプリセット実体 | 無視（全集は公開しない） |
+| `asset-presets/catalog.json` | 選択用メタデータ（`id` / `path` / `category` / `tags` / `license` / `attribution` / `source_url` 等） | コミット可 |
+| `asset-presets/ATTRIBUTIONS.md` | 出典・ライセンス一覧 | コミット可 |
+| `game-projects/{NNN}_{slug}/assets/` | **採用した画像だけ** | コミット（Pages 公開） |
+| `game-projects/assets/` | ポータルサムネ・ブランド専用 | 従来どおり（プリセットと混ぜない） |
+
+運用:
+
+1. 利用規約を確認したうえで `asset-presets/files/{category}/` に配置する
+2. `catalog.json` と `ATTRIBUTIONS.md` を更新する
+3. ゲーム採用時だけ `game-projects/{NNN}_{slug}/assets/` へコピーし、`src/index.html` から相対参照する（例: `../assets/player.png`）
+4. プリセット全集を `game-projects/` に置かない（Pages が丸ごと公開するため）
+
+将来の AI 自動選択は `catalog.json` を入力とする。選択ロジック自体は本節の対象外。
+
 ---
 
 ## 8. 命名・配置規約
@@ -276,8 +387,14 @@ KotatsuStorage.set("your_game_id", "highScore", best);
 | 仕様 | `shared/specs/spec_{stem}.md` | |
 | 会議ログ | `shared/meeting/meeting_{stem}.jsonl` | |
 | レビュー | `shared/review/review_{stem}.md` | |
+| トレンド調査 | `shared/research/latest_trends.json` | 上書き |
+| メカニクス DB | `shared/research/mechanics_db.json` | 蓄積 |
+| テーマ案 | `shared/research/latest_theme_options.json` | 上書き |
 | ポータル属性 | `data-game-id` / `data-stat-id` = `{game_id}` | 両者は同一必須（`data-stat-id` は省略可） |
 | サムネ | `game-projects/assets/{NNN}_{slug}.png` | |
+| 画像プリセット実体 | `asset-presets/files/{category}/...` | Git 非追跡 |
+| プリセットカタログ | `asset-presets/catalog.json` | |
+| ゲーム採用画像 | `game-projects/{NNN}_{slug}/assets/` | 採用分のみコミット |
 | 統計予約キー | `pv`（ポータル PV） | ゲーム ID に使わない |
 
 `game_id` の採番:
@@ -374,6 +491,7 @@ pytest -q tests/test_game_syntax_check.py tests/test_portal_listing_integration.
 
 ### デプロイ対象外（非同梱）
 
+- `shared/research/`（市場調査・テーマ案 JSON）
 - `shared/review/`（プレイテストレビュー）
 - `shared/logs/`（Bot 運用ログ）
 - `ai-core/` 本体（アバターは raw.githubusercontent.com 経由で参照）
@@ -434,6 +552,7 @@ CLI・Discord からの起動手順は [README.md](./README.md) の「開発完�
 
 - CLI: `ai-core/scripts/post_mortem.py`
 - Discord: 社長命令チャンネルから「反省会」を選択。確認 UI・進捗・結果は反省会チャンネル（`POST_MORTEM_CHANNEL_ID`）へ投稿
+- Discord 反省会は `spec_game_links.json` の直近リンク済みゲームから `artifact_stem` を自動解決する（手入力不要）
 
 ---
 
@@ -441,10 +560,13 @@ CLI・Discord からの起動手順は [README.md](./README.md) の「開発完�
 
 運用時は本節だけ追ってもよい。
 
-- [ ] Discord の社長命令チャンネルから企画会議を開始し、完走する
+- [ ] （未実施なら）Discord の社長命令チャンネルから **市場調査** を実行し、`shared/research/` の JSON を更新する
+- [ ] 社長命令チャンネルから **企画会議** を選び、テーマ案を選ぶ（または再検討／フリー入力）
+- [ ] 企画会議を完走する
 - [ ] 社長が **Go** する（NoGo なら修正方針を入れて再会議。再会議は新 `artifact_stem`）
 - [ ] 仕様書・レジストリ・Discord 通知の **自動採番 `game_id` / 予定パス** を確認する（Go した stem が正本）
 - [ ] 予約どおりの `game-projects/{NNN}_{slug}/src/index.html` を実装する（単一 HTML・外部エンジンなし）
+- [ ] 画像プリセットを使う場合は採用分のみ `game-projects/{NNN}_{slug}/assets/` へコピーし、帰属を `asset-presets/ATTRIBUTIONS.md` に残す（全集は Git に入れない）
 - [ ] `KotatsuStats.sendPlayCount("{game_id}")` を **文字列リテラル** で入れる（予約 ID と一致。変数経由は不可）
 - [ ] 永続化が必要なら `KotatsuStorage`（`common/storage.js`）を使い、`game_id` でキーを名前空間化する
 - [ ] ポータルにカード・サムネ・`data-game-id` / `data-stat-id` を追加する（同一 ID）
@@ -461,13 +583,16 @@ CLI・Discord からの起動手順は [README.md](./README.md) の「開発完�
 1. **プロセス変更時は本ファイルを先に更新する。** README はセットアップ・短い手順・本設計書へのリンクに留める。
 2. **個別仕様・レビューは `shared/` に置く。** 本ファイルへは一般化した規約・フェーズだけ反映する。
 3. **企画会議の共有制約は `shared/meeting/grand_rules.yaml` を正本とする。** 役割固有の評価軸は `ai-core/src/agents/*/config.yaml`。
-4. **用語はコードと揃える。** `artifact_stem` / `game_id` / `DIVERGENCE`・`CONFLICT`・`FINAL` / Go・NoGo・中止 / `FINISH_FOR_PRESIDENT` など。
-5. **改定したら下表に追記する。**
+4. **市場調査・テーマ案の成果物は `shared/research/` を正本とする。** 実装は `market_research.py` / `theme_proposal.py`。
+5. **用語はコードと揃える。** `artifact_stem` / `game_id` / `DIVERGENCE`・`CONFLICT`・`FINAL` / Go・NoGo・中止 / `FINISH_FOR_PRESIDENT` / テーマ案の `元ネタ直球`・`世界観置換` など。
+6. **改定したら下表に追記する。**
 
 ### 改定履歴
 
 | 日付 | 要約 |
 |------|------|
+| 2026-08-02 | 市場調査・テーマ案選択を正式フェーズとして追記。プロセス選択を3択化、`MARKET_RESEARCH_CHANNEL_ID` / `shared/research/` / テーマ案 UI（案選択・再検討・フリー入力・中止）・Pages 非同梱を明文化。旧「テーマ Modal 直入力」起点の記述を置換 |
+| 2026-08-02 | 画像プリセット（`asset-presets/`）を追加。実体は Git 非追跡、カタログ／帰属のみコミット。採用画像は各ゲームの `assets/` へコピーする規約を §7.5 に明文化 |
 | 2026-07-30 | 実装実態に同期。NoGo 再会議の新 artifact_stem、sendPlayCount 文字列リテラル必須、staff.html / アバター / shared/logs、Pages 同梱・非同梱範囲、グランドルール読込パス、002_heavy_love_snake 命名例を明文化 |
 | 2026-07-30 | 社長判定に「中止」を追加。Go/NoGo/中止の3択とし、中止は仕様生成・再会議なしで終了 |
 | 2026-07-30 | ログイン不要のローカルセーブ共通ヘルパー（`KotatsuStorage` / `storage.js`）を追加。matatabi_chaos にハイスコア配線 |

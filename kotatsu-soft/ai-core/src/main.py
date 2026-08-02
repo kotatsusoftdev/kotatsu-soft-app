@@ -375,7 +375,7 @@ async def publish_post_mortem_results(
 
 def build_market_research_proposal_message() -> str:
     return (
-        "ヂャイアンに市場調査（トレンド＋ゲームメカニクス）をやらせますか？\n"
+        "ヂャイアンに市場調査（トレンド＋ゲーム性）をやらせますか？\n"
         "- 出力: `shared/research/latest_trends.json` / `mechanics_db.json`\n"
         "- 所要: 外部API呼び出しあり（数十秒〜数分）"
     )
@@ -393,7 +393,7 @@ def format_market_research_summary(trends: dict, mechanics: dict) -> str:
         "おう、のぶ太！オレ様が市場調査をぶちかましてやったぜ！",
         "",
         f"トレンド: {len(trend_items)}件（上書き）",
-        f"メカニクスDB: 合計 {mechanics.get('total_count', len(mech_items))}件",
+        f"ゲーム性DB: 合計 {mechanics.get('total_count', len(mech_items))}件",
         f"データソース: {trends.get('data_source') or '（不明）'}",
         "",
         "【トレンド上位】",
@@ -413,7 +413,7 @@ def format_market_research_summary(trends: dict, mechanics: dict) -> str:
             lines.append(f"  元: {short_original}")
 
     lines.append("")
-    lines.append("【メカニクス（代表）】")
+    lines.append("【ゲーム性（代表）】")
     if not mech_items:
         lines.append("- （なし）")
     else:
@@ -755,38 +755,59 @@ async def propose_market_research(
     await results_channel.send(build_market_research_proposal_message(), view=view)
 
 
-def format_theme_options_agent_message(payload: dict) -> str:
+def format_theme_options_intro_message() -> str:
+    return (
+        "おう、のぶ太！オレ様がトレンド×ゲーム性でバカゲー企画をぶち上げてやったぜ！\n"
+        "気に入った案を選べ。イマイチなら『もう一度検討』か『フリー入力』だ！"
+    )
+
+
+def format_theme_option_agent_message(option: dict) -> str:
+    oid = option.get("option_id", "?")
+    title = str(option.get("title") or "").strip()
+    summary = str(option.get("concept_summary") or "").strip()
+    approach = str(option.get("approach_type") or "").strip()
+    design_intent = str(option.get("design_intent") or "").strip()
+    synergy = str(option.get("synergy_reason") or "").strip()
+    viral = str(option.get("viral_point") or "").strip()
+    sources = (
+        option.get("combined_sources")
+        if isinstance(option.get("combined_sources"), dict)
+        else {}
+    )
+    trend_label = str(sources.get("trend_label") or "").strip()
+    mech_label = str(sources.get("mechanic_label") or "").strip()
+    display_title = title if title.startswith("『") else f"『{title}』"
+    approach_label = f"{approach}案" if approach and not approach.endswith("案") else approach
+    header = f"**[ 案 {oid} ] {display_title}**"
+    if approach_label:
+        header = f"{header} ({approach_label})"
+    lines = [header]
+    if summary:
+        lines.append(f"- **コンセプト:** {summary}")
+    if trend_label or mech_label:
+        lines.append(
+            f"- **掛け合わせ:** トレンド({trend_label}) × ゲーム性({mech_label})"
+        )
+    if design_intent:
+        lines.append(f"- **アプローチの狙い:** {design_intent}")
+    if synergy:
+        lines.append(f"- **なぜこの組み合わせか（シナジー理由）:** {synergy}")
+    if viral:
+        lines.append(f"- **バズ要素:** {viral}")
+    return "\n".join(lines).strip()
+
+
+def format_theme_options_agent_messages(payload: dict) -> list[str]:
+    """ヂャイアン名義で順に投稿するメッセージ一覧（導入＋各案）。"""
     options = payload.get("options") if isinstance(payload, dict) else None
     if not isinstance(options, list):
         options = []
-    lines = [
-        "おう、のぶ太！オレ様がトレンド×ゲーム性でバカゲー企画をぶち上げてやったぜ！",
-        "気に入った案を選べ。イマイチなら『もう一度検討』か『フリー入力』だ！",
-        "",
-    ]
+    messages = [format_theme_options_intro_message()]
     for opt in options:
-        if not isinstance(opt, dict):
-            continue
-        oid = opt.get("option_id", "?")
-        title = str(opt.get("title") or "").strip()
-        summary = str(opt.get("concept_summary") or "").strip()
-        viral = str(opt.get("viral_point") or "").strip()
-        sources = (
-            opt.get("combined_sources")
-            if isinstance(opt.get("combined_sources"), dict)
-            else {}
-        )
-        lines.append(f"**案{oid}: {title}**")
-        if summary:
-            lines.append(summary)
-        if viral:
-            lines.append(f"バズ: {viral}")
-        trend_label = str(sources.get("trend_label") or "").strip()
-        mech_label = str(sources.get("mechanic_label") or "").strip()
-        if trend_label or mech_label:
-            lines.append(f"掛け合わせ: {trend_label} × {mech_label}")
-        lines.append("")
-    return "\n".join(lines).strip()
+        if isinstance(opt, dict):
+            messages.append(format_theme_option_agent_message(opt))
+    return messages
 
 
 async def publish_theme_options(
@@ -794,30 +815,38 @@ async def publish_theme_options(
     payload: dict,
     *,
     api_key: str,
+    avoid_history: Optional[list[dict]] = None,
 ) -> None:
-    await channel.send(
-        "🎯 企画テーマ案です。会議に進む案を選ぶか、再検討／フリー入力／中止を選んでください。"
-    )
-    await _post_as_agent(
-        channel,
-        username="ヂャイアン(マーケ)",
-        avatar_url=_AGENT_AVATAR_URLS["marketing"],
-        content=format_theme_options_agent_message(payload),
-    )
     options = payload.get("options") if isinstance(payload.get("options"), list) else []
+    typed_options = [o for o in options if isinstance(o, dict)]
+
+    # ヂャイアンの発言を先に完了させてから、Bot が選択 UI を出す
+    for content in format_theme_options_agent_messages(payload):
+        await _post_as_agent(
+            channel,
+            username="ヂャイアン(マーケ)",
+            avatar_url=_AGENT_AVATAR_URLS["marketing"],
+            content=content,
+        )
+
     view = ThemeOptionSelectView(
-        options=[o for o in options if isinstance(o, dict)],
+        options=typed_options,
         api_key=api_key,
         meeting_channel_id=channel.id,
+        avoid_history=list(avoid_history or []),
     )
-    await channel.send("どれで行く？", view=view)
+    await channel.send(
+        "🎯 企画テーマ案です。会議に進む案を選ぶか、再検討／フリー入力／中止を選んでください。\n"
+        "どれで行く？",
+        view=view,
+    )
 
 
 async def propose_theme_options_for_meeting(
     *,
     order_channel: discord.abc.Messageable,
     cfg: Config,
-    previous_titles: Optional[list[str]] = None,
+    previous_options: Optional[list[dict]] = None,
     meeting_channel: Optional[discord.TextChannel] = None,
     already_reserved: bool = False,
 ) -> None:
@@ -839,15 +868,21 @@ async def propose_theme_options_for_meeting(
             f"企画検討チャンネル <#{channel.id}> でテーマ案を確認してください。"
         )
 
+    history = [o for o in (previous_options or []) if isinstance(o, dict)]
     await channel.send("🔄 ヂャイアンがトレンド×ゲーム性でテーマ案を作成中です…")
     try:
 
         def _run() -> dict:
             proposer = ThemeProposer(gemini_api_key=cfg.GEMINI_API_KEY)
-            return proposer.generate(previous_titles=previous_titles or [])
+            return proposer.generate(previous_options=history)
 
         payload = await asyncio.to_thread(_run)
-        await publish_theme_options(channel, payload, api_key=cfg.GEMINI_API_KEY)
+        await publish_theme_options(
+            channel,
+            payload,
+            api_key=cfg.GEMINI_API_KEY,
+            avoid_history=history,
+        )
     except ThemeProposalError as exc:
         await channel.send(f"[theme_proposal] 失敗しました: {exc}")
         await _release_meeting_channel(channel.id)
@@ -863,11 +898,13 @@ class ThemeOptionSelectView(discord.ui.View):
         options: list[dict],
         api_key: str,
         meeting_channel_id: int,
+        avoid_history: Optional[list[dict]] = None,
     ):
         super().__init__(timeout=900)
         self.options = options
         self.api_key = api_key
         self.meeting_channel_id = meeting_channel_id
+        self.avoid_history = list(avoid_history or [])
         self._resolved = False
         # True の間は View が会議チャンネル予約を保持（timeout / 中止で解放）
         self._holds_reservation = True
@@ -967,9 +1004,7 @@ class ThemeOptionSelectView(discord.ui.View):
             "🔁 了解。ヂャイアンにもう一度検討させます…",
             ephemeral=False,
         )
-        previous_titles = [
-            str(o.get("title") or "") for o in self.options if o.get("title")
-        ]
+        history = list(self.avoid_history) + list(self.options)
         meeting_channel = await resolve_text_channel(self.meeting_channel_id)
         if meeting_channel is None:
             await interaction.followup.send("⚠️ 企画検討チャンネルが見つかりません。")
@@ -993,7 +1028,7 @@ class ThemeOptionSelectView(discord.ui.View):
         await propose_theme_options_for_meeting(
             order_channel=meeting_channel,
             cfg=cfg,
-            previous_titles=previous_titles,
+            previous_options=history,
             meeting_channel=meeting_channel,
             already_reserved=True,
         )

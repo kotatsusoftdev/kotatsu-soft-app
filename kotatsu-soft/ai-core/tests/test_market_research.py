@@ -14,6 +14,7 @@ from market_research import (
     MarketResearchError,
     MarketResearcher,
     TAVILY_MEME_QUERY_SUFFIX,
+    _extract_json_object,
     build_dedupe_key,
     build_tiktok_tavily_query,
     clip_original_keyword,
@@ -27,6 +28,48 @@ from market_research import (
 
 def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_extract_json_object_repairs_trailing_comma() -> None:
+    payload = _extract_json_object('{"mechanics": [{"name": "a"}],}')
+    assert payload["mechanics"][0]["name"] == "a"
+
+
+def test_extract_json_object_repairs_unescaped_quotes() -> None:
+    # LLM が日本語文字列内で " をエスケープせず返す典型パターン
+    raw = (
+        '{\n'
+        '  "mechanics": [\n'
+        '    {\n'
+        '      "name": "回避アクション",\n'
+        '      "core_loop": "敵の "やっほー" を避け続ける"\n'
+        '    }\n'
+        '  ]\n'
+        '}'
+    )
+    payload = _extract_json_object(raw)
+    assert payload["mechanics"][0]["name"] == "回避アクション"
+    assert "やっほー" in payload["mechanics"][0]["core_loop"]
+
+
+def test_call_llm_json_retries_on_invalid_json(tmp_path: Path) -> None:
+    calls = {"n": 0}
+
+    def fake_llm(prompt: str) -> str:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            # json-repair でもオブジェクトにできない完全な非JSON
+            return "THIS IS NOT JSON AT ALL <<<>>>"
+        return '{"mechanics": [{"name": "ok", "core_loop": "loop"}]}'
+
+    researcher = MarketResearcher(
+        mock=True,
+        research_dir=tmp_path,
+        llm_callable=fake_llm,
+    )
+    parsed = researcher._call_llm_json("prompt", label="mechanics")
+    assert calls["n"] == 2
+    assert parsed["mechanics"][0]["name"] == "ok"
 
 
 def test_build_dedupe_key_normalizes_tokens() -> None:

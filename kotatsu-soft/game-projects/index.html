@@ -664,13 +664,19 @@
       height: auto;
     }
 
+    .studio-links {
+      display: grid;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
     .staff-link {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
       width: 100%;
-      margin-top: 4px;
+      margin-top: 0;
       text-decoration: none;
       color: #fff9f0;
       background: linear-gradient(90deg, #bf2f2f, #cf5632);
@@ -919,7 +925,10 @@
             decoding="async"
           />
         </figure>
-        <a class="staff-link" href="./staff.html">社員紹介を見る</a>
+        <div class="studio-links">
+          <a class="staff-link" href="./staff.html">社員紹介を見る</a>
+          <a class="staff-link" href="./trends.html">ヂャイアンの市場調査を見る</a>
+        </div>
       </section>
     </main>
 

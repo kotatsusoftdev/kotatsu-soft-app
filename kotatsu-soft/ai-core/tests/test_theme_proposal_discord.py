@@ -79,7 +79,7 @@ async def test_propose_theme_options_for_meeting_posts_view(
         def __init__(self, **kwargs: Any) -> None:
             pass
 
-        def generate(self, previous_titles=None):
+        def generate(self, **kwargs: Any):
             return payload
 
     monkeypatch.setattr(main, "ThemeProposer", FakeProposer)
@@ -116,7 +116,7 @@ async def test_propose_theme_options_releases_on_error(
         def __init__(self, **kwargs: Any) -> None:
             pass
 
-        def generate(self, previous_titles=None):
+        def generate(self, **kwargs: Any):
             raise ThemeProposalError("調査データなし")
 
     monkeypatch.setattr(main, "ThemeProposer", BoomProposer)
@@ -149,27 +149,215 @@ async def test_propose_theme_options_busy_when_reserved(
     assert len(meeting_channel.messages) == 0
 
 
-def test_format_theme_options_agent_message() -> None:
-    text = main.format_theme_options_agent_message(
+def test_format_theme_options_agent_messages_splits_per_option() -> None:
+    messages = main.format_theme_options_agent_messages(
         {
             "options": [
                 {
                     "option_id": 1,
                     "title": "自撮り崩壊",
                     "concept_summary": "積んで崩す",
+                    "approach_type": "元ネタ直球",
+                    "design_intent": "絵面が完成しているので直球",
+                    "synergy_reason": "自己肯定を積む操作で増幅",
                     "viral_point": "短尺映え",
                     "combined_sources": {
                         "trend_label": "全肯定",
                         "mechanic_label": "タワー",
                     },
-                }
+                },
+                {
+                    "option_id": 2,
+                    "title": "大喜利崩壊",
+                    "concept_summary": "回して笑う",
+                    "approach_type": "世界観置換",
+                    "design_intent": "別世界観の方がカオス",
+                    "synergy_reason": "理不尽をお題で回す",
+                    "viral_point": "一言映え",
+                    "combined_sources": {
+                        "trend_label": "法則",
+                        "mechanic_label": "ルーレット",
+                    },
+                },
             ]
         }
     )
-    assert "ヂャイアン" in text or "オレ様" in text
-    assert "案1: 自撮り崩壊" in text
-    assert "積んで崩す" in text
-    assert "全肯定 × タワー" in text
+    assert len(messages) == 3
+    assert "オレ様" in messages[0]
+    assert "[ 案 1 ]" in messages[1]
+    assert "自撮り崩壊" in messages[1]
+    assert "元ネタ直球案" in messages[1]
+    assert "コンセプト" in messages[1]
+    assert "積んで崩す" in messages[1]
+    assert "アプローチの狙い" in messages[1]
+    assert "絵面が完成しているので直球" in messages[1]
+    assert "シナジー理由" in messages[1]
+    assert "自己肯定を積む操作で増幅" in messages[1]
+    assert "トレンド(全肯定) × ゲーム性(タワー)" in messages[1]
+    assert "[ 案 2 ]" in messages[2]
+    assert "大喜利崩壊" in messages[2]
+    assert "世界観置換案" in messages[2]
+    assert "案 1" not in messages[2]
+
+
+@pytest.mark.asyncio
+async def test_publish_theme_options_posts_jaian_before_buttons(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    posted: list[dict[str, Any]] = []
+
+    class FakeChannel:
+        id = 999
+
+        async def send(self, content: str, **kwargs: Any) -> None:
+            posted.append(
+                {
+                    "kind": "bot",
+                    "content": content,
+                    "has_view": "view" in kwargs,
+                }
+            )
+
+    async def fake_post_as_agent(channel, *, username: str, avatar_url: str, content: str):
+        posted.append(
+            {
+                "kind": "agent",
+                "username": username,
+                "content": content,
+            }
+        )
+
+    monkeypatch.setattr(main, "_post_as_agent", fake_post_as_agent)
+
+    payload = {
+        "options": [
+            {
+                "option_id": 1,
+                "title": "案1",
+                "concept_summary": "要約1",
+                "synergy_reason": "理由1",
+                "viral_point": "バズ1",
+                "combined_sources": {
+                    "trend_label": "A",
+                    "mechanic_label": "B",
+                },
+            },
+            {
+                "option_id": 2,
+                "title": "案2",
+                "concept_summary": "要約2",
+                "synergy_reason": "理由2",
+                "viral_point": "バズ2",
+                "combined_sources": {
+                    "trend_label": "C",
+                    "mechanic_label": "D",
+                },
+            },
+        ]
+    }
+    await main.publish_theme_options(FakeChannel(), payload, api_key="dummy")
+
+    agent_posts = [p for p in posted if p["kind"] == "agent"]
+    bot_posts = [p for p in posted if p["kind"] == "bot"]
+    assert len(agent_posts) == 3  # intro + 2 options
+    assert all(p["username"] == "ヂャイアン(マーケ)" for p in agent_posts)
+    assert "案1" in agent_posts[1]["content"]
+    assert "シナジー理由" in agent_posts[1]["content"]
+    assert "案2" in agent_posts[2]["content"]
+    assert len(bot_posts) == 1
+    assert bot_posts[0]["has_view"] is True
+    assert posted.index(agent_posts[-1]) < posted.index(bot_posts[0])
+
+
+@pytest.mark.asyncio
+async def test_theme_option_regen_passes_accumulated_previous_options(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = Config.load()
+    monkeypatch.setattr(main, "_config", cfg)
+    monkeypatch.setattr(main, "_active_meeting_channel_ids", {cfg.MEETING_CHANNEL_ID})
+
+    meeting_channel = FakeSourceChannel(cfg.MEETING_CHANNEL_ID)
+    monkeypatch.setattr(
+        main, "resolve_text_channel", AsyncMock(return_value=meeting_channel)
+    )
+
+    captured: dict[str, Any] = {}
+
+    async def fake_propose(**kwargs: Any) -> None:
+        captured["previous_options"] = kwargs.get("previous_options")
+
+    monkeypatch.setattr(main, "propose_theme_options_for_meeting", fake_propose)
+
+    history_opt = {
+        "option_id": 9,
+        "title": "履歴案",
+        "combined_sources": {"trend_id": "t0", "mechanic_id": "m0"},
+    }
+    current_opt = {
+        "option_id": 1,
+        "title": "現行案",
+        "combined_sources": {"trend_id": "t1", "mechanic_id": "m1"},
+    }
+    view = main.ThemeOptionSelectView(
+        options=[current_opt],
+        api_key="dummy",
+        meeting_channel_id=cfg.MEETING_CHANNEL_ID,
+        avoid_history=[history_opt],
+    )
+
+    class FakeMessage:
+        async def edit(self, **kwargs: Any) -> None:
+            return None
+
+    interaction = SimpleNamespace(
+        response=SimpleNamespace(send_message=AsyncMock()),
+        followup=SimpleNamespace(send=AsyncMock()),
+        message=FakeMessage(),
+    )
+    await view._on_regen(interaction)
+
+    assert captured["previous_options"] == [history_opt, current_opt]
+
+
+@pytest.mark.asyncio
+async def test_publish_theme_options_keeps_avoid_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    posted_views: list[Any] = []
+
+    class FakeChannel:
+        id = 123
+
+        async def send(self, content: str, **kwargs: Any) -> None:
+            if "view" in kwargs:
+                posted_views.append(kwargs["view"])
+
+    monkeypatch.setattr(main, "_post_as_agent", AsyncMock())
+
+    history = [{"title": "過去", "combined_sources": {"trend_id": "t", "mechanic_id": "m"}}]
+    await main.publish_theme_options(
+        FakeChannel(),
+        {
+            "options": [
+                {
+                    "option_id": 1,
+                    "title": "新案",
+                    "concept_summary": "要約",
+                    "synergy_reason": "理由",
+                    "viral_point": "バズ",
+                    "combined_sources": {
+                        "trend_label": "A",
+                        "mechanic_label": "B",
+                    },
+                }
+            ]
+        },
+        api_key="dummy",
+        avoid_history=history,
+    )
+    assert len(posted_views) == 1
+    assert posted_views[0].avoid_history == history
 
 
 @pytest.mark.asyncio
