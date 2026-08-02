@@ -397,10 +397,17 @@ async def test_start_meeting_from_theme_already_reserved(
 
     run_called = {"value": False}
 
-    async def fake_run_meeting_round(theme: str, channel: Any) -> None:
+    async def fake_run_meeting_round(
+        theme: str,
+        channel: Any,
+        revision_guidance: Any = None,
+        theme_parts: Any = None,
+    ) -> None:
         run_called["value"] = True
         assert "選択テーマ" in theme
         assert channel.id == cfg.MEETING_CHANNEL_ID
+        assert theme_parts is not None
+        assert theme_parts.title == "選択テーマ"
 
     monkeypatch.setattr(main, "run_meeting_round", fake_run_meeting_round)
 

@@ -1,0 +1,2698 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>高額請求病院：暴走ベッドでレシートを避けろ！</title>
+  <style>
+    :root {
+      --ink: #1a3a3a;
+      --accent: #c62828;
+      --mint: #e8f5f2;
+      --teal: #2a6b63;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      background:
+        radial-gradient(ellipse at 80% 15%, rgba(180, 230, 220, 0.45), transparent 42%),
+        radial-gradient(ellipse at 10% 85%, rgba(198, 40, 40, 0.12), transparent 38%),
+        linear-gradient(165deg, #d8ebe6 0%, #b8d4ce 45%, #8fb5ae 100%);
+      color: var(--ink);
+      font-family: "Trebuchet MS", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+
+    .wrap {
+      width: min(94vw, 420px);
+      display: grid;
+      gap: 10px;
+      justify-items: center;
+    }
+
+    .topbar {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .home-link {
+      text-decoration: none;
+      color: #1e4a45;
+      border: 1px solid rgba(30, 74, 69, 0.28);
+      background: rgba(255, 255, 255, 0.78);
+      border-radius: 999px;
+      padding: 6px 11px;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      transition: background 140ms ease, transform 140ms ease;
+    }
+
+    .home-link:hover,
+    .home-link:focus-visible {
+      background: rgba(255, 255, 255, 0.95);
+      transform: translateY(-1px);
+    }
+
+    .brand {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: #2a6b63;
+      opacity: 0.95;
+    }
+
+    canvas {
+      width: 100%;
+      aspect-ratio: 4 / 7;
+      border: 2px solid rgba(42, 107, 99, 0.28);
+      border-radius: 16px;
+      background: #1a2e2c;
+      box-shadow:
+        0 16px 44px rgba(20, 50, 46, 0.28),
+        0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+      display: block;
+      cursor: pointer;
+    }
+
+    .share-bar {
+      display: none;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .share-bar.is-visible {
+      display: flex;
+    }
+
+    .share-btn {
+      appearance: none;
+      border: 1px solid rgba(198, 40, 40, 0.45);
+      background: linear-gradient(180deg, #e53935, #c62828);
+      color: #fff;
+      border-radius: 999px;
+      padding: 8px 16px;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      box-shadow: 0 6px 16px rgba(198, 40, 40, 0.28);
+    }
+
+    .share-btn:hover,
+    .share-btn:focus-visible {
+      filter: brightness(1.06);
+    }
+
+    .hint {
+      font-size: 12px;
+      letter-spacing: 0.03em;
+      color: #2a5550;
+      opacity: 0.92;
+      text-align: center;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="home-link" href="../../index.html">コタツ・ソフト へ戻る</a>
+      <div class="brand">RECEIPT BED DASH</div>
+    </div>
+    <canvas id="game" width="400" height="700" aria-label="高額請求病院"></canvas>
+    <div class="share-bar" id="shareBar" hidden>
+      <button type="button" class="share-btn" id="shareBtn">SNSでシェアする</button>
+    </div>
+    <div class="hint">←→ / A D ・ Space／ダブルタップでダッシュ ・ ¥で収入UP ・ 所持金¥-100,000で破産・60日生還を目指せ</div>
+  </div>
+
+  <script src="../../common/stats.js"></script>
+  <script src="../../common/storage.js"></script>
+  <script>
+    (() => {
+      "use strict";
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const shareBar = document.getElementById("shareBar");
+      const shareBtn = document.getElementById("shareBtn");
+
+      const W = canvas.width;
+      const H = canvas.height;
+      const GAME_ID = "receipt_bed_dash";
+      const HIGH_SCORE_KEY = "bestHeld";
+      const BILL_LIMIT = 100000;
+      const HELD_FLOOR = -100000;
+      const TIME_LIMIT = 60;
+      const SPEED_MIN = 380;
+      const SPEED_MAX = 920;
+      const DYING_DURATION = 1.6;
+      const CLEAR_DURATION = 2.0;
+      const MOVE_SPEED = 520;
+      const DASH_COOLDOWN_MAX = 0.58;
+      const DASH_SPEED = 620;
+      const DASH_DURATION = 0.12;
+      const DASH_STYLE_DURATION = 0.16;
+      const DASH_INVULN = 0.16;
+      const STYLISH_DODGE_DISCOUNT = 700;
+      const COIN_HEAL_MIN = 17500;
+      const COIN_HEAL_RANGE = 11901; // 平均 ≈ 23450（旧平均の約70%）
+      const COIN_INTERVAL_BASE = 1.55;
+      const COIN_INTERVAL_MIN = 0.38;
+      const COIN_TIMER_START = 0.7;
+      const RECEIPT_INTERVAL_BASE = 1.05;
+      const RECEIPT_INTERVAL_MIN = 0.32;
+      const SPAWN_TIMER_START = 0.55;
+      const NURSE_QUIPS = ["追加よ！", "オプション！", "請求ね！", "また足すわ！", "サインして！"];
+      const NURSE_QUIPS_PINCH = ["まだ足せるわよ！", "破産コースね！", "逃げられないよ！", "請求が止まらない！", "覚悟して！"];
+      const NURSE_QUIPS_SAFE = ["おとなしいわね", "まだまだ余裕？", "オプションどう？", "サインお願い"];
+      const NURSE_QUIPS_DANGER = ["危険オプション！", "特大請求よ！", "覚悟しなさい！"];
+
+      const STATE = {
+        TITLE: "title",
+        PLAYING: "playing",
+        DYING: "dying",
+        CLEARING: "clearing",
+        GAMEOVER: "gameover",
+      };
+
+      const RECEIPT_ITEMS = [
+        "特選・枕の空気代",
+        "謎の面会謝絶料",
+        "廊下の風量オプション",
+        "点滴スタンド美観料",
+        "病室BGM利用料",
+        "シーツ折り目調整費",
+        "ナースコール返信料",
+        "窓の外の景色税",
+        "スリッパ重力補正",
+        "酸素プレミアム加算",
+        "ベッドキャスター保険",
+        "深夜・無言見守り料",
+        "カーテン開閉手数料",
+        "廊下直進プレミアム",
+        "枕カバー折り目税",
+        "医師の腕組み鑑賞料",
+        "カルテのインク代",
+        "体温計リセット料",
+        "名札読み上げ手数料",
+        "点滴袋の気泡除去代",
+        "廊下曲がり角保険料",
+        "病室の埃鑑賞オプション",
+        "食事トレイ運び賃（往復）",
+        "血圧計カフレンタル",
+        "問診「大丈夫？」確認料",
+        "検査結果封筒のり代",
+        "待合室雑誌をめくった税",
+        "消毒液香りプレミアム",
+        "車椅子の影利用料",
+        "採血後の綿球記念品",
+        "ナースシューズ静音オプション",
+        "夜勤帯の時計遅延補正",
+        "レントゲン笑顔キープ料",
+        "点滴スタンド駐車料金",
+        "退院予定変更事務手数料",
+      ];
+
+      const COIN_PHRASES = [
+        "宝くじに当たった！",
+        "給料が入った！",
+        "保険が下りた！",
+        "お年玉キタ！",
+        "臨時ボーナス！",
+        "口座に振り込まれた！",
+        "還付金が戻ってきた！",
+        "副業が当たった！",
+        "ポイント現金化した！",
+        "親戚からお見舞い金！",
+        "キャンペーン当選！",
+        "財布の奥から発見！",
+      ];
+
+      const HIT_WORDS = ["追加！", "赤字！", "オプション！", "請求！", "また加算！"];
+      const ROOM_NUMBERS = ["301", "302", "305", "307", "312", "ICU"];
+
+      const HUD_H = 96;
+      const BASE_PLAYER_Y = H - 130;
+      // 頭がHUDに食い込まない下限（Yが小さいほど画面上）
+      const MIN_PLAYER_Y = HUD_H + 120;
+      const PLAYER_W = 52;
+      const PLAYER_H = 96;
+      const PLAY_LEFT = 28;
+      const PLAY_RIGHT = W - 28;
+      const GAP_CLEARANCE = PLAYER_W + 36;
+      const PLAY_WIDTH = PLAY_RIGHT - PLAY_LEFT;
+      const MAX_RECEIPT_W = Math.min(200, PLAY_WIDTH - GAP_CLEARANCE);
+      const STACK_STEP = 22;
+      const STACK_CARD_H = 56;
+      const MAX_STACK_VISIBLE = 5;
+      // スタックで押し上げる枚数上限（これ以上当たっても自機はこれ以上上に行かない）
+      const MAX_STACK_LIFT = 4;
+      const MOTIONS = ["fall", "sway", "zigzag", "surge"];
+      const COIN_MOTIONS = ["fall", "sway", "zigzag", "drift"];
+
+      const keys = Object.create(null);
+      const keysJust = Object.create(null);
+      let pointerX = null;
+      let pointerActive = false;
+      let tapPending = false;
+      let lastTapAt = 0;
+
+      let state = STATE.TITLE;
+      let income = 0;
+      let bill = 0;
+      let bestScore = null;
+      let isNewRecord = false;
+      let cleared = false;
+      let speed = SPEED_MIN;
+      let elapsed = 0;
+      let spawnTimer = 0;
+      let coinTimer = 0;
+      let invuln = 0;
+      let flash = 0;
+      let healFlash = 0;
+      let lastTime = 0;
+      let playCountSent = false;
+      let scrollY = 0;
+      let dashVx = 0;
+      let dashTimer = 0;
+      let dashCooldown = 0;
+      let dashStyleTimer = 0;
+      let moveDir = 0;
+      let billPop = null;
+      let surviveSec = 0;
+      let dyingTimer = 0;
+      let dyingPhase = 0;
+      let heartbeatAcc = 0;
+      let warnHeartbeatAcc = 0;
+      let clearTimer = 0;
+      let clearStamp = 0;
+      let lifeFlashOffset = 0;
+      let hitHistory = [];
+      let hitCount = 0;
+      let topHitItem = null;
+      let prevBestAtStart = null;
+      let hitItemFlash = null;
+      let milestoneFlash = null;
+      let milestoneShown = { d30: false, d10: false, d5: false, d3: false };
+      let lastDaysLeft = TIME_LIMIT;
+      let accountingRush = 0;
+      let rushSpawnLeft = 0;
+      let rushBurstAcc = 0;
+      let wasInDebt = false;
+      let heldFlash = 0;
+      let visitRushCooldown = 14;
+      let visitRushActive = 0;
+      let visitRushBurstLeft = 0;
+      let visitRushAcc = 0;
+      let billingAlert = 0;
+
+      let playerX = W * 0.5;
+      let playerY = BASE_PLAYER_Y;
+      let playerTilt = 0;
+      let receipts = [];
+      let coins = [];
+      let nurses = [];
+      let stackedReceipts = [];
+      let floatTexts = [];
+      let particles = [];
+
+      let audioCtx = null;
+
+      const sendPlayCount = window.KotatsuStats && window.KotatsuStats.sendPlayCount;
+      const storage = window.KotatsuStorage || null;
+
+      function loadBestScore() {
+        if (!storage || typeof storage.get !== "function") return null;
+        const saved = storage.get(GAME_ID, HIGH_SCORE_KEY);
+        if (saved == null || saved === "") return null;
+        const num = Number(saved);
+        if (!Number.isFinite(num)) return null;
+        return Math.trunc(num);
+      }
+
+      function saveBestScore(value) {
+        if (!storage || typeof storage.set !== "function") return false;
+        return storage.set(GAME_ID, HIGH_SCORE_KEY, value);
+      }
+
+      bestScore = loadBestScore();
+
+      function heldMoney() {
+        return Math.trunc(income - bill);
+      }
+
+      function getRankTitle(held, didClear) {
+        if (held >= 100000) return "億ション退院";
+        if (held >= 50000) return "黒字出院";
+        if (held >= 0) return didClear ? "ギリギリ出院" : "トントン破産";
+        return "大赤字入院";
+      }
+
+      function checkHeldDebtTransition() {
+        const held = heldMoney();
+        if (!wasInDebt && held < 0) {
+          wasInDebt = true;
+          milestoneFlash = { text: "赤字転落！", life: 1.3, maxLife: 1.3 };
+          playDangerNurse();
+        } else if (wasInDebt && held >= 0) {
+          wasInDebt = false;
+        }
+      }
+
+      function setShareVisible(visible) {
+        if (!shareBar) return;
+        shareBar.hidden = !visible;
+        shareBar.classList.toggle("is-visible", visible);
+      }
+
+      function formatYen(n) {
+        const v = Math.trunc(n);
+        const sign = v < 0 ? "-" : "";
+        return sign + "¥" + Math.abs(v).toLocaleString("ja-JP");
+      }
+
+      function daysLeft() {
+        return Math.max(0, Math.ceil(TIME_LIMIT - elapsed));
+      }
+
+      function buildShareText(held, didClear) {
+        const title = getRankTitle(held, didClear);
+        if (didClear) {
+          return (
+            `高額請求病院で生還！【${title}】所持金 ${formatYen(held)}` +
+            `\n#コタツソフト #高額請求病院`
+          );
+        }
+        return (
+          `高額請求病院で破産…【${title}】所持金 ${formatYen(held)}` +
+          `\n#コタツソフト #高額請求病院`
+        );
+      }
+
+      function openXShare() {
+        const text = buildShareText(heldMoney(), cleared);
+        const url = `${location.origin}${location.pathname}`;
+        const intent = new URL("https://twitter.com/intent/tweet");
+        intent.searchParams.set("text", text);
+        intent.searchParams.set("url", url);
+        window.open(intent.toString(), "_blank", "noopener,noreferrer");
+      }
+
+      function ensureAudio() {
+        if (!audioCtx) {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (Ctx) audioCtx = new Ctx();
+        }
+        if (audioCtx && audioCtx.state === "suspended") {
+          audioCtx.resume().catch(() => {});
+        }
+      }
+
+      function playBeep(freq, duration, type, volume) {
+        if (!audioCtx) return;
+        const t0 = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type || "square";
+        osc.frequency.setValueAtTime(freq, t0);
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(volume || 0.06, t0 + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(t0);
+        osc.stop(t0 + duration + 0.02);
+      }
+
+      function playNoise(duration, volume) {
+        if (!audioCtx) return;
+        const t0 = audioCtx.currentTime;
+        const len = Math.max(1, (audioCtx.sampleRate * duration) | 0);
+        const buffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+        const src = audioCtx.createBufferSource();
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        src.buffer = buffer;
+        filter.type = "highpass";
+        filter.frequency.value = 1200;
+        gain.gain.setValueAtTime(volume || 0.04, t0);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        src.start(t0);
+        src.stop(t0 + duration + 0.02);
+      }
+
+      function playHit() {
+        playBeep(180, 0.18, "sawtooth", 0.08);
+        playBeep(90, 0.12, "square", 0.04);
+        setTimeout(() => playBeep(120, 0.22, "square", 0.05), 40);
+      }
+
+      function playStylishDodge() {
+        playBeep(980, 0.07, "sine", 0.055);
+        playBeep(1320, 0.1, "triangle", 0.045);
+      }
+
+      function playDash() {
+        playBeep(620, 0.06, "square", 0.05);
+        playBeep(880, 0.05, "triangle", 0.03);
+      }
+
+      function playMilestone() {
+        playBeep(740, 0.08, "triangle", 0.05);
+        setTimeout(() => playBeep(988, 0.12, "sine", 0.055), 80);
+      }
+
+      function playStamp() {
+        playNoise(0.06, 0.05);
+        playBeep(160, 0.1, "square", 0.06);
+      }
+
+      function playHeal() {
+        playBeep(880, 0.06, "sine", 0.05);
+        setTimeout(() => playBeep(1175, 0.08, "triangle", 0.055), 40);
+        setTimeout(() => playBeep(1568, 0.12, "sine", 0.045), 90);
+      }
+
+      function playThrow() {
+        playNoise(0.08, 0.035);
+        playBeep(420, 0.07, "sawtooth", 0.03);
+      }
+
+      function playDangerNurse() {
+        playBeep(220, 0.1, "sawtooth", 0.05);
+        playBeep(233, 0.12, "square", 0.04);
+      }
+
+      function playClearJingle() {
+        playBeep(523, 0.09, "triangle", 0.055);
+        setTimeout(() => playBeep(659, 0.09, "triangle", 0.055), 90);
+        setTimeout(() => playBeep(784, 0.09, "triangle", 0.055), 180);
+        setTimeout(() => playBeep(988, 0.1, "sine", 0.06), 270);
+        setTimeout(() => playBeep(1175, 0.12, "sine", 0.06), 360);
+        setTimeout(() => playBeep(1568, 0.22, "triangle", 0.05), 470);
+      }
+
+      function playStart() {
+        playBeep(440, 0.08, "triangle", 0.05);
+        setTimeout(() => playBeep(660, 0.1, "triangle", 0.05), 70);
+      }
+
+      function playHeartbeat(critical) {
+        const vol = critical ? 0.095 : 0.065;
+        const gap = critical ? 42 : 72;
+        playBeep(critical ? 940 : 880, 0.05, "sine", vol);
+        setTimeout(() => playBeep(critical ? 720 : 660, 0.06, "sine", vol * 0.7), gap);
+      }
+
+      function playFlatline() {
+        if (!audioCtx) return;
+        const t0 = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, t0);
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(0.04, t0 + 0.05);
+        gain.gain.setValueAtTime(0.035, t0 + 0.7);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.1);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(t0);
+        osc.stop(t0 + 1.15);
+      }
+
+      function randItem(arr) {
+        return arr[(Math.random() * arr.length) | 0];
+      }
+
+      function difficultyT() {
+        return Math.min(1, elapsed / TIME_LIMIT);
+      }
+
+      function rampCurve() {
+        const r = difficultyT();
+        return r * r;
+      }
+
+      // 債務比率: 所持金が HELD_FLOOR に近づくほど 0→1（旧名・billRatio を維持）
+      function billRatio() {
+        return Math.min(1, Math.max(0, -heldMoney()) / Math.abs(HELD_FLOOR));
+      }
+
+      function syncPlayerY() {
+        const liftCount = Math.min(stackedReceipts.length, MAX_STACK_LIFT);
+        const raised = liftCount * STACK_STEP;
+        playerY = Math.max(MIN_PLAYER_Y, BASE_PLAYER_Y - raised);
+      }
+
+      function playerBox() {
+        return {
+          x: playerX - PLAYER_W * 0.5,
+          y: playerY - PLAYER_H * 0.5,
+          w: PLAYER_W,
+          h: PLAYER_H,
+        };
+      }
+
+      function clampReceiptX(x, w) {
+        return Math.max(PLAY_LEFT, Math.min(PLAY_RIGHT - w, x));
+      }
+
+      function aabb(a, b) {
+        return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+      }
+
+      function makeLineItems(count) {
+        const items = [];
+        let total = 0;
+        for (let i = 0; i < count; i++) {
+          const amount = 800 + ((Math.random() * 5200) | 0);
+          total += amount;
+          items.push({ name: randItem(RECEIPT_ITEMS), amount });
+        }
+        return { items, total };
+      }
+
+      function pickMotion() {
+        const t = difficultyT();
+        if (Math.random() > 0.35 + t * 0.35) return "fall";
+        return randItem(MOTIONS);
+      }
+
+      function pickReceiptShape(danger) {
+        const r = Math.random();
+        if (danger) {
+          if (r < 0.4) return "micro";
+          if (r < 0.75) return "tall";
+          if (r < 0.9) return "slab";
+          return "normal";
+        }
+        if (r < 0.42) return "normal";
+        if (r < 0.68) return "tall";
+        if (r < 0.9) return "micro";
+        return "slab";
+      }
+
+      function makeReceipt(side, danger) {
+        const shape = pickReceiptShape(danger);
+        let w;
+        let h;
+        let speedMul;
+        let lineCount;
+        let chargeScale = 1;
+
+        if (shape === "tall") {
+          w = 40 + Math.random() * 18;
+          h = 120 + Math.random() * 50;
+          speedMul = 0.8 + Math.random() * 0.5;
+          lineCount = 5 + ((Math.random() * 5) | 0);
+          chargeScale = 1.15;
+        } else if (shape === "micro") {
+          w = 36 + Math.random() * 12;
+          h = 40 + Math.random() * 16;
+          speedMul = 1.65 + Math.random() * 0.7;
+          lineCount = 2 + ((Math.random() * 3) | 0);
+          chargeScale = 0.65;
+        } else if (shape === "slab") {
+          w = Math.min(MAX_RECEIPT_W, 110 + Math.random() * 70);
+          h = 48 + Math.random() * 22;
+          speedMul = 0.9 + Math.random() * 0.55;
+          lineCount = 3 + ((Math.random() * 4) | 0);
+          chargeScale = 1.25;
+        } else {
+          w = Math.min(MAX_RECEIPT_W, 64 + Math.random() * 66);
+          h = 72 + Math.random() * 38;
+          speedMul = 0.9 + Math.random() * 0.7;
+          lineCount = 4 + ((Math.random() * 6) | 0);
+        }
+
+        if (danger) speedMul *= 1.45;
+
+        const { items, total } = makeLineItems(lineCount);
+        const charge = Math.max(800, Math.trunc(total * chargeScale));
+        const motion = pickMotion();
+
+        const halfZone = (PLAY_WIDTH - GAP_CLEARANCE) * 0.5;
+        let x;
+        if (side === "left") {
+          const span = Math.max(4, halfZone - w);
+          x = PLAY_LEFT + Math.random() * span;
+        } else if (side === "right") {
+          const span = Math.max(4, halfZone - w);
+          x = PLAY_RIGHT - w - Math.random() * span;
+        } else {
+          x = PLAY_LEFT + Math.random() * Math.max(8, PLAY_RIGHT - PLAY_LEFT - w);
+        }
+        x = clampReceiptX(x, w);
+
+        return {
+          x,
+          y: HUD_H + 36,
+          w,
+          h,
+          shape,
+          items,
+          charge,
+          lineCount,
+          passed: false,
+          speedMul,
+          motion,
+          baseX: x,
+          swayPhase: Math.random() * Math.PI * 2,
+          zigDir: Math.random() < 0.5 ? -1 : 1,
+          zigTimer: 0.25 + Math.random() * 0.35,
+          surgeAt: 0.35 + Math.random() * 0.35,
+          surged: false,
+          age: 0,
+          danger: !!danger,
+        };
+      }
+
+      function makeCoin() {
+        const size = 28;
+        const x = PLAY_LEFT + 20 + Math.random() * (PLAY_RIGHT - PLAY_LEFT - 40 - size);
+        const heal = COIN_HEAL_MIN + ((Math.random() * COIN_HEAL_RANGE) | 0);
+        const motion = Math.random() < 0.4 ? "fall" : randItem(COIN_MOTIONS);
+        return {
+          x,
+          y: HUD_H + 36,
+          w: size,
+          h: size,
+          heal,
+          spin: Math.random() * Math.PI * 2,
+          speedMul: 0.65 + Math.random() * 0.55,
+          motion,
+          baseX: x,
+          swayPhase: Math.random() * Math.PI * 2,
+          zigDir: Math.random() < 0.5 ? -1 : 1,
+          zigTimer: 0.3 + Math.random() * 0.4,
+          driftDir: Math.random() < 0.5 ? -1 : 1,
+        };
+      }
+
+      function pickNurseQuip(kind, danger) {
+        if (danger) return randItem(NURSE_QUIPS_DANGER);
+        if (kind === "coin") {
+          return billRatio() > 0.65 ? "救いの¥ね" : "臨時収入よ";
+        }
+        if (billRatio() > 0.65) return randItem(NURSE_QUIPS_PINCH);
+        if (billRatio() < 0.25) return randItem(NURSE_QUIPS_SAFE);
+        return randItem(NURSE_QUIPS);
+      }
+
+      function queueNurseThrow(kind, danger) {
+        const nx = PLAY_LEFT + 40 + Math.random() * (PLAY_WIDTH - 80);
+        nurses.push({
+          x: nx,
+          y: HUD_H + 8,
+          age: 0,
+          maxLife: 0.95,
+          throwAt: 0.35,
+          thrown: false,
+          kind,
+          danger: !!danger,
+          quip: pickNurseQuip(kind, danger),
+        });
+        if (danger) playDangerNurse();
+        else playThrow();
+      }
+
+      function releaseNurseThrow(n) {
+        if (n.kind === "coin") {
+          coins.push(makeCoin());
+          return;
+        }
+        if (n.kind === "pair") {
+          receipts.push(makeReceipt("left", n.danger));
+          receipts.push(makeReceipt("right", n.danger));
+          return;
+        }
+        receipts.push(makeReceipt(null, n.danger));
+      }
+
+      function requestReceiptSpawn(pair) {
+        const late = daysLeft() <= 10;
+        const danger = (elapsed >= 22 || late) && Math.random() < (late ? 0.52 : 0.34);
+        queueNurseThrow(pair ? "pair" : "single", danger);
+      }
+
+      function requestCoinSpawn() {
+        queueNurseThrow("coin", false);
+      }
+
+      function updateReceiptMotion(r, t) {
+        r.age += t;
+        let fallMul = r.speedMul;
+        if (r.motion === "surge") {
+          if (!r.surged && r.age >= r.surgeAt) {
+            r.surged = true;
+          }
+          if (r.surged && r.age < r.surgeAt + 0.45) {
+            fallMul *= 1.85;
+          }
+        }
+        r.y += speed * fallMul * t;
+
+        if (r.motion === "sway") {
+          r.swayPhase += t * 3.2;
+          r.x = clampReceiptX(r.baseX + Math.sin(r.swayPhase) * 28, r.w);
+        } else if (r.motion === "zigzag") {
+          r.zigTimer -= t;
+          r.x += r.zigDir * 90 * t;
+          if (r.x <= PLAY_LEFT || r.x + r.w >= PLAY_RIGHT || r.zigTimer <= 0) {
+            r.zigDir *= -1;
+            r.zigTimer = 0.28 + Math.random() * 0.35;
+            r.x = clampReceiptX(r.x, r.w);
+          }
+        } else {
+          r.x = clampReceiptX(r.x, r.w);
+        }
+      }
+
+      function updateCoinMotion(c, t) {
+        c.spin += t * 6;
+        c.y += speed * c.speedMul * t;
+        if (c.motion === "sway") {
+          c.swayPhase += t * 3.6;
+          c.x = clampReceiptX(c.baseX + Math.sin(c.swayPhase) * 34, c.w);
+        } else if (c.motion === "zigzag") {
+          c.zigTimer -= t;
+          c.x += c.zigDir * 70 * t;
+          if (c.x <= PLAY_LEFT || c.x + c.w >= PLAY_RIGHT || c.zigTimer <= 0) {
+            c.zigDir *= -1;
+            c.zigTimer = 0.3 + Math.random() * 0.35;
+            c.x = clampReceiptX(c.x, c.w);
+          }
+        } else if (c.motion === "drift") {
+          c.x += c.driftDir * 40 * t;
+          if (c.x <= PLAY_LEFT || c.x + c.w >= PLAY_RIGHT) {
+            c.driftDir *= -1;
+            c.x = clampReceiptX(c.x, c.w);
+          }
+        } else {
+          c.x = clampReceiptX(c.x, c.w);
+        }
+
+        // 請求70%超でコイン磁力（救済）
+        if (state === STATE.PLAYING && billRatio() > 0.7) {
+          const cx = c.x + c.w * 0.5;
+          const pull = (playerX - cx) * Math.min(1, 2.4 * t);
+          c.x = clampReceiptX(c.x + pull, c.w);
+          c.baseX = c.x;
+        }
+      }
+
+      function updateNurses(dt) {
+        for (let i = nurses.length - 1; i >= 0; i--) {
+          const n = nurses[i];
+          n.age += dt;
+          if (!n.thrown && n.age >= n.throwAt) {
+            n.thrown = true;
+            releaseNurseThrow(n);
+            spawnSparks(n.x + 10, n.y + 24, n.danger ? "#ef5350" : "#fff59d");
+          }
+          if (n.age >= n.maxLife) nurses.splice(i, 1);
+        }
+      }
+
+      function spawnHitTexts() {
+        for (let i = 0; i < 8; i++) {
+          floatTexts.push({
+            text: randItem(HIT_WORDS),
+            x: 40 + Math.random() * (W - 80),
+            y: 100 + Math.random() * (H * 0.35),
+            vy: -20 - Math.random() * 40,
+            life: 0.55 + Math.random() * 0.35,
+            maxLife: 0.9,
+            size: 16 + Math.random() * 12,
+            rot: (Math.random() - 0.5) * 0.55,
+            color: "#c62828",
+          });
+        }
+      }
+
+      function spawnSparks(x, y, color) {
+        for (let i = 0; i < 12; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const sp = 60 + Math.random() * 140;
+          particles.push({
+            x, y,
+            vx: Math.cos(a) * sp,
+            vy: Math.sin(a) * sp,
+            life: 0.35 + Math.random() * 0.35,
+            color: color || "#ff5252",
+            size: 2 + Math.random() * 3,
+          });
+        }
+      }
+
+      function pushStackedReceipt(receipt) {
+        stackedReceipts.push({
+          items: receipt.items.slice(),
+          charge: receipt.charge,
+        });
+        syncPlayerY();
+      }
+
+      function popStackedReceipt() {
+        if (stackedReceipts.length === 0) return false;
+        stackedReceipts.pop();
+        syncPlayerY();
+        return true;
+      }
+
+      function popStackedReceipts(count) {
+        let n = 0;
+        while (n < count && popStackedReceipt()) n += 1;
+        return n;
+      }
+
+      function resetRun() {
+        income = 0;
+        bill = 0;
+        speed = SPEED_MIN;
+        elapsed = 0;
+        surviveSec = 0;
+        spawnTimer = SPAWN_TIMER_START;
+        coinTimer = COIN_TIMER_START;
+        invuln = 0;
+        flash = 0;
+        healFlash = 0;
+        dashVx = 0;
+        dashTimer = 0;
+        dashCooldown = 0;
+        dashStyleTimer = 0;
+        moveDir = 0;
+        dyingTimer = 0;
+        dyingPhase = 0;
+        heartbeatAcc = 0;
+        warnHeartbeatAcc = 0;
+        playerX = W * 0.5;
+        playerY = BASE_PLAYER_Y;
+        playerTilt = 0;
+        receipts = [];
+        coins = [];
+        nurses = [];
+        stackedReceipts = [];
+        floatTexts = [];
+        particles = [];
+        hitHistory = [];
+        hitCount = 0;
+        topHitItem = null;
+        prevBestAtStart = bestScore;
+        hitItemFlash = null;
+        milestoneFlash = null;
+        milestoneShown = { d30: false, d10: false, d5: false, d3: false };
+        lastDaysLeft = TIME_LIMIT;
+        accountingRush = 0;
+        rushSpawnLeft = 0;
+        rushBurstAcc = 0;
+        wasInDebt = false;
+        heldFlash = 0;
+        visitRushCooldown = 12 + Math.random() * 8;
+        visitRushActive = 0;
+        visitRushBurstLeft = 0;
+        visitRushAcc = 0;
+        billingAlert = 0;
+        clearTimer = 0;
+        clearStamp = 0;
+        lifeFlashOffset = 0;
+        billPop = null;
+        scrollY = 0;
+        isNewRecord = false;
+        cleared = false;
+      }
+
+      function startGame() {
+        ensureAudio();
+        playStart();
+        resetRun();
+        state = STATE.PLAYING;
+        setShareVisible(false);
+        if (!playCountSent && typeof sendPlayCount === "function") {
+          sendPlayCount("receipt_bed_dash");
+          playCountSent = true;
+        }
+      }
+
+      function endGame(didClear) {
+        cleared = !!didClear;
+        state = STATE.GAMEOVER;
+        const score = heldMoney();
+        if (bestScore == null || score > bestScore) {
+          bestScore = score;
+          isNewRecord = true;
+          saveBestScore(bestScore);
+        }
+        setShareVisible(true);
+      }
+
+      function beginDying() {
+        state = STATE.DYING;
+        dyingTimer = DYING_DURATION;
+        dyingPhase = 0;
+        heartbeatAcc = 0;
+        lifeFlashOffset = 0;
+        ensureAudio();
+        playHeartbeat();
+      }
+
+      function beginClear() {
+        state = STATE.CLEARING;
+        clearTimer = CLEAR_DURATION;
+        clearStamp = 0;
+        cleared = true;
+        ensureAudio();
+        playClearJingle();
+        for (let i = 0; i < 40; i++) {
+          particles.push({
+            x: Math.random() * W,
+            y: -10 - Math.random() * 40,
+            vx: (Math.random() - 0.5) * 80,
+            vy: 60 + Math.random() * 120,
+            life: 1.2 + Math.random() * 0.8,
+            color: randItem(["#ffd54f", "#80cbc4", "#fff59d", "#ef9a9a", "#90caf9"]),
+            size: 3 + Math.random() * 4,
+          });
+        }
+      }
+
+      function updateClearing(dt) {
+        clearTimer -= dt;
+        const progress = 1 - Math.max(0, clearTimer) / CLEAR_DURATION;
+        if (progress > 0.28 && clearStamp === 0) {
+          clearStamp = 0.001;
+          playStamp();
+        }
+        if (clearStamp > 0 && clearStamp < 1) {
+          clearStamp = Math.min(1, clearStamp + dt * 4.5);
+        }
+
+        playerTilt += (Math.sin(performance.now() * 0.01) * 0.08 - playerTilt) * Math.min(1, 10 * dt);
+        playerY = BASE_PLAYER_Y + Math.sin(performance.now() * 0.008) * 4;
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.life -= dt;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vy += 40 * dt;
+          if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        if (clearTimer <= 0) {
+          endGame(true);
+        }
+      }
+
+      function tryDash() {
+        if (state !== STATE.PLAYING) return;
+        if (dashTimer > 0 || dashCooldown > 0) return;
+        const dir = moveDir !== 0
+          ? moveDir
+          : (keys.ArrowLeft || keys.KeyA ? -1 : keys.ArrowRight || keys.KeyD ? 1 : (playerX < W * 0.5 ? 1 : -1));
+        dashVx = dir * DASH_SPEED;
+        dashTimer = DASH_DURATION;
+        dashCooldown = DASH_COOLDOWN_MAX;
+        dashStyleTimer = DASH_STYLE_DURATION;
+        invuln = Math.max(invuln, DASH_INVULN);
+        playDash();
+      }
+
+      function stylishDashDodge(receipt) {
+        bill = Math.max(0, bill - STYLISH_DODGE_DISCOUNT);
+        heldFlash = 0.35;
+        checkHeldDebtTransition();
+        spawnSparks(playerX, playerY, "#80cbc4");
+        floatTexts.push({
+          text: "華麗な回避！ -" + formatYen(STYLISH_DODGE_DISCOUNT),
+          x: playerX,
+          y: playerY - 30,
+          vy: -50,
+          life: 0.9,
+          maxLife: 0.9,
+          size: 17,
+          rot: 0,
+          color: "#26a69a",
+        });
+        playStylishDodge();
+      }
+
+      function recordHitHistory(receipt) {
+        hitCount += 1;
+        const items = receipt.items && receipt.items.length
+          ? receipt.items
+          : [{ name: randItem(RECEIPT_ITEMS), amount: receipt.charge }];
+        for (const it of items) {
+          hitHistory.push({ name: it.name, amount: it.amount });
+          if (!topHitItem || it.amount > topHitItem.amount) {
+            topHitItem = { name: it.name, amount: it.amount };
+          }
+        }
+        const headline = items[0].name;
+        hitItemFlash = { text: headline, life: 0.85, maxLife: 0.85 };
+      }
+
+      function getAccountingSummary() {
+        if (hitCount <= 0) return "被弾0回・明細なし";
+        const top = topHitItem
+          ? topHitItem.name + " " + formatYen(topHitItem.amount)
+          : "明細なし";
+        return "被弾" + hitCount + "回・最高 " + top;
+      }
+
+      function getCompareText() {
+        if (prevBestAtStart == null) return "";
+        const diff = heldMoney() - prevBestAtStart;
+        if (diff === 0) return "ベストと同額";
+        if (diff > 0) return "ベストより " + formatYen(diff) + " 多い";
+        return "ベストより " + formatYen(-diff) + " 少ない";
+      }
+
+      function hitPlayer(receipt) {
+        if (state !== STATE.PLAYING) return;
+        if (dashTimer > 0 || dashStyleTimer > 0) {
+          stylishDashDodge(receipt);
+          return;
+        }
+        if (invuln > 0) return;
+        invuln = 0.75;
+        flash = 0.45;
+        bill += receipt.charge;
+        billPop = { amount: receipt.charge, life: 0.55, maxLife: 0.55 };
+        heldFlash = 0.35;
+        recordHitHistory(receipt);
+        spawnHitTexts();
+        pushStackedReceipt(receipt);
+        spawnSparks(playerX, playerY, "#ff1744");
+        playHit();
+        checkHeldDebtTransition();
+        if (heldMoney() <= HELD_FLOOR) {
+          // 所持金を下限に合わせて請求を丸める
+          bill = income - HELD_FLOOR;
+          beginDying();
+        }
+      }
+
+      function collectCoin(coin) {
+        income += Math.trunc(coin.heal);
+        healFlash = 0.35;
+        heldFlash = 0.35;
+        checkHeldDebtTransition();
+        // スタックが厚いほど多めに明細解除して自機を下へ戻す
+        const popCount = stackedReceipts.length >= 6 ? 3 : stackedReceipts.length >= 3 ? 2 : 1;
+        const popped = popStackedReceipts(popCount);
+        const phrase = randItem(COIN_PHRASES);
+        spawnSparks(coin.x + coin.w * 0.5, coin.y + coin.h * 0.5, "#ffd54f");
+        floatTexts.push({
+          text: phrase,
+          x: coin.x + coin.w * 0.5,
+          y: coin.y - 6,
+          vy: -46,
+          life: 1,
+          maxLife: 1,
+          size: 15,
+          rot: 0,
+          color: "#f9a825",
+        });
+        floatTexts.push({
+          text: "収入 +" + formatYen(coin.heal),
+          x: coin.x + coin.w * 0.5,
+          y: coin.y + 14,
+          vy: -40,
+          life: 1,
+          maxLife: 1,
+          size: 14,
+          rot: 0,
+          color: "#43a047",
+        });
+        if (popped > 0) {
+          floatTexts.push({
+            text: popped >= 2 ? "明細" + popped + "枚クリア！" : "明細1枚クリア！",
+            x: coin.x + coin.w * 0.5,
+            y: coin.y + 30,
+            vy: -28,
+            life: 0.85,
+            maxLife: 0.85,
+            size: 13,
+            rot: 0,
+            color: "#66bb6a",
+          });
+        }
+        playHeal();
+      }
+
+      function checkMilestones() {
+        const days = daysLeft();
+        if (!milestoneShown.d30 && lastDaysLeft > 30 && days <= 30) {
+          milestoneShown.d30 = true;
+          milestoneFlash = { text: "あと30日…", life: 1.4, maxLife: 1.4 };
+          playMilestone();
+        }
+        if (!milestoneShown.d10 && lastDaysLeft > 10 && days <= 10) {
+          milestoneShown.d10 = true;
+          milestoneFlash = { text: "最終10日！", life: 1.5, maxLife: 1.5 };
+          playMilestone();
+        }
+        if (!milestoneShown.d5 && lastDaysLeft > 5 && days <= 5) {
+          milestoneShown.d5 = true;
+          milestoneFlash = { text: "お会計準備…", life: 1.6, maxLife: 1.6 };
+          billingAlert = 3.2;
+          playDangerNurse();
+          playMilestone();
+        }
+        if (!milestoneShown.d3 && lastDaysLeft > 3 && days <= 3) {
+          milestoneShown.d3 = true;
+          milestoneFlash = { text: "会計準備中…", life: 1.7, maxLife: 1.7 };
+          accountingRush = 1.6;
+          rushSpawnLeft = 4;
+          rushBurstAcc = 0;
+          playDangerNurse();
+          playMilestone();
+        }
+        lastDaysLeft = days;
+      }
+
+      function updatePlaying(dt) {
+        const t = dt;
+
+        elapsed += t;
+        surviveSec += t;
+
+        if (elapsed >= TIME_LIMIT) {
+          elapsed = TIME_LIMIT;
+          surviveSec = TIME_LIMIT;
+          beginClear();
+          return;
+        }
+
+        checkMilestones();
+
+        const ramp = difficultyT();
+        const curve = rampCurve();
+        speed = SPEED_MIN + (SPEED_MAX - SPEED_MIN) * curve;
+        scrollY += speed * t * (0.9 + curve * 0.45);
+
+        if (invuln > 0) invuln = Math.max(0, invuln - dt);
+        if (flash > 0) flash = Math.max(0, flash - dt);
+        if (healFlash > 0) healFlash = Math.max(0, healFlash - dt);
+        if (dashCooldown > 0) dashCooldown = Math.max(0, dashCooldown - dt);
+        if (dashStyleTimer > 0) dashStyleTimer = Math.max(0, dashStyleTimer - dt);
+        if (billPop) {
+          billPop.life -= dt;
+          if (billPop.life <= 0) billPop = null;
+        }
+        if (hitItemFlash) {
+          hitItemFlash.life -= dt;
+          if (hitItemFlash.life <= 0) hitItemFlash = null;
+        }
+        if (milestoneFlash) {
+          milestoneFlash.life -= dt;
+          if (milestoneFlash.life <= 0) milestoneFlash = null;
+        }
+        if (heldFlash > 0) heldFlash = Math.max(0, heldFlash - dt);
+        if (billingAlert > 0) billingAlert = Math.max(0, billingAlert - dt);
+
+        visitRushCooldown -= dt;
+        if (visitRushActive > 0) {
+          visitRushActive -= dt;
+          visitRushAcc += dt;
+          if (visitRushBurstLeft > 0 && visitRushAcc >= 0.22) {
+            visitRushAcc = 0;
+            visitRushBurstLeft -= 1;
+            requestCoinSpawn();
+          }
+        } else if (visitRushCooldown <= 0 && elapsed > 8) {
+          const pinchBoost = billRatio() > 0.55 ? 0.35 : 0;
+          if (Math.random() < 0.55 + pinchBoost) {
+            visitRushActive = 1.6;
+            visitRushBurstLeft = 4 + ((Math.random() * 3) | 0);
+            visitRushAcc = 0;
+            milestoneFlash = { text: "お見舞いラッシュ！", life: 1.4, maxLife: 1.4 };
+            playMilestone();
+          }
+          visitRushCooldown = 18 + Math.random() * 10;
+        }
+
+        updateNurses(dt);
+
+        // 所持金ピンチで心拍テンポアップ（BGM風緊張）
+        {
+          const debt = billRatio();
+          const inPinch = debt > 0.2 || heldMoney() < 0;
+          if (inPinch) {
+            warnHeartbeatAcc += dt;
+            const tension = Math.max(debt, heldMoney() < 0 ? 0.4 : 0);
+            const interval = Math.max(0.15, 0.75 - tension * 0.6);
+            if (warnHeartbeatAcc >= interval) {
+              warnHeartbeatAcc = 0;
+              playHeartbeat(tension > 0.65);
+            }
+          } else {
+            warnHeartbeatAcc = 0;
+          }
+        }
+
+        let move = 0;
+        if (keys.ArrowLeft || keys.KeyA) move -= 1;
+        if (keys.ArrowRight || keys.KeyD) move += 1;
+        moveDir = move;
+
+        if (pointerActive && pointerX != null) {
+          const diff = pointerX - playerX;
+          if (Math.abs(diff) > 4) moveDir = Math.sign(diff);
+          playerX += diff * Math.min(1, 16 * t);
+        } else {
+          playerX += move * MOVE_SPEED * t;
+        }
+
+        if (dashTimer > 0) {
+          playerX += dashVx * t;
+          dashTimer -= dt;
+          if (dashTimer <= 0) {
+            dashTimer = 0;
+            dashVx = 0;
+          }
+        }
+
+        playerX = Math.max(PLAY_LEFT + PLAYER_W * 0.5, Math.min(PLAY_RIGHT - PLAYER_W * 0.5, playerX));
+        const tiltTarget = moveDir * 0.2 + (dashTimer > 0 ? Math.sign(dashVx) * 0.14 : 0);
+        playerTilt += (tiltTarget - playerTilt) * Math.min(1, 14 * t);
+
+        const lateGame = daysLeft() <= 10;
+        const br = billRatio();
+        // 余裕(債務低)→レシート多め／ピンチ(債務高)→コイン多め
+        spawnTimer -= t;
+        if (spawnTimer <= 0) {
+          const pairChance = 0.22 + curve * 0.3 + (lateGame ? 0.12 : 0) + (br < 0.35 ? 0.06 : 0) - (br > 0.7 ? 0.12 : 0);
+          requestReceiptSpawn(elapsed > 10 && Math.random() < Math.max(0.12, pairChance));
+          let interval = RECEIPT_INTERVAL_BASE - curve * 0.45;
+          interval *= 0.7 + br * 0.55; // 余裕時やや密、ピンチ時は間を空ける
+          if (lateGame) interval *= 0.78;
+          spawnTimer = Math.max(RECEIPT_INTERVAL_MIN, interval) + Math.random() * 0.15;
+        }
+
+        coinTimer -= t;
+        if (coinTimer <= 0) {
+          requestCoinSpawn();
+          if (br > 0.72 && Math.random() < 0.5) requestCoinSpawn();
+          let coinInterval = COIN_INTERVAL_BASE - curve * 0.55 + Math.random() * 0.28;
+          coinInterval *= 1.35 - br * 1.0; // br低=コイン少なめ, br高=多め
+          if (lateGame) coinInterval *= br > 0.5 ? 0.6 : 0.85;
+          coinTimer = Math.max(COIN_INTERVAL_MIN, coinInterval);
+        }
+
+        if (accountingRush > 0) {
+          accountingRush -= t;
+          rushBurstAcc += t;
+          if (rushSpawnLeft > 0 && rushBurstAcc >= 0.32) {
+            rushBurstAcc = 0;
+            rushSpawnLeft -= 1;
+            requestReceiptSpawn(Math.random() < 0.35);
+          }
+        }
+
+        const pBox = playerBox();
+
+        for (let i = receipts.length - 1; i >= 0; i--) {
+          const r = receipts[i];
+          updateReceiptMotion(r, t);
+          const rBox = { x: r.x, y: r.y, w: r.w, h: r.h };
+
+          if (state === STATE.PLAYING && aabb(pBox, rBox)) {
+            if (dashTimer > 0 || dashStyleTimer > 0 || invuln <= 0) {
+              hitPlayer(r);
+              receipts.splice(i, 1);
+              continue;
+            }
+          }
+
+          if (r.y > H + 40) receipts.splice(i, 1);
+        }
+
+        for (let i = coins.length - 1; i >= 0; i--) {
+          const c = coins[i];
+          updateCoinMotion(c, t);
+          const cBox = { x: c.x, y: c.y, w: c.w, h: c.h };
+          if (state === STATE.PLAYING && aabb(pBox, cBox)) {
+            collectCoin(c);
+            coins.splice(i, 1);
+            continue;
+          }
+          if (c.y > H + 40) coins.splice(i, 1);
+        }
+
+        for (let i = floatTexts.length - 1; i >= 0; i--) {
+          const f = floatTexts[i];
+          f.life -= dt;
+          f.y += f.vy * dt;
+          if (f.life <= 0) floatTexts.splice(i, 1);
+        }
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.life -= dt;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vx *= 0.96;
+          p.vy *= 0.96;
+          if (p.life <= 0) particles.splice(i, 1);
+        }
+      }
+
+      function updateDying(dt) {
+        dyingTimer -= dt;
+        lifeFlashOffset += dt * 55;
+        const progress = 1 - Math.max(0, dyingTimer) / DYING_DURATION;
+
+        if (progress < 0.55) {
+          dyingPhase = 0;
+          heartbeatAcc += dt;
+          const interval = 0.28 + progress * 0.55;
+          if (heartbeatAcc >= interval) {
+            heartbeatAcc = 0;
+            playHeartbeat();
+          }
+        } else if (dyingPhase < 1) {
+          dyingPhase = 1;
+          playFlatline();
+        }
+
+        if (dyingTimer <= 0) {
+          endGame(false);
+        }
+      }
+
+      function getLifeFlashLines() {
+        if (hitHistory.length > 0) return hitHistory;
+        return [
+          { name: "特選・枕の空気代", amount: 3200 },
+          { name: "謎の面会謝絶料", amount: 4800 },
+          { name: "廊下の風量オプション", amount: 2100 },
+          { name: "点滴スタンド美観料", amount: 5600 },
+          { name: "病室BGM利用料", amount: 1900 },
+        ];
+      }
+
+      function drawLifeFlash(alpha) {
+        const lines = getLifeFlashLines();
+        const rowH = 28;
+        const cycle = lines.length * rowH;
+        const scroll = lifeFlashOffset % cycle;
+        ctx.save();
+        ctx.fillStyle = `rgba(12, 0, 0, ${0.35 * alpha})`;
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = Math.min(1, alpha);
+        ctx.font = "bold 15px Trebuchet MS, sans-serif";
+        for (let y = -scroll; y < H + rowH; y += rowH) {
+          const idx = Math.floor((y + scroll) / rowH) % lines.length;
+          const line = lines[(idx + lines.length) % lines.length];
+          const drawY = y + 18;
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "rgba(0,0,0,0.75)";
+          ctx.fillStyle = "#ffebee";
+          ctx.textAlign = "left";
+          ctx.strokeText(line.name, 14, drawY);
+          ctx.fillText(line.name, 14, drawY);
+          ctx.fillStyle = "#ff8a80";
+          ctx.textAlign = "right";
+          const yen = formatYen(line.amount);
+          ctx.strokeText(yen, W - 12, drawY);
+          ctx.fillText(yen, W - 12, drawY);
+        }
+        ctx.restore();
+      }
+
+      function roundRect(x, y, w, h, r) {
+        const rr = Math.min(r, w * 0.5, h * 0.5);
+        ctx.beginPath();
+        ctx.moveTo(x + rr, y);
+        ctx.arcTo(x + w, y, x + w, y + h, rr);
+        ctx.arcTo(x + w, y + h, x, y + h, rr);
+        ctx.arcTo(x, y + h, x, y, rr);
+        ctx.arcTo(x, y, x + w, y, rr);
+        ctx.closePath();
+      }
+
+      function drawCorridor() {
+        // Floor tiles (center aisle)
+        ctx.fillStyle = "#d7e8e3";
+        ctx.fillRect(PLAY_LEFT - 6, 0, PLAY_RIGHT - PLAY_LEFT + 12, H);
+
+        const tile = 36;
+        const off = scrollY % (tile * 2);
+        for (let y = -tile * 2 + off; y < H + tile; y += tile) {
+          for (let x = PLAY_LEFT; x < PLAY_RIGHT; x += tile) {
+            const ix = ((x / tile) | 0);
+            const iy = ((y / tile) | 0);
+            if ((ix + iy) % 2 === 0) {
+              ctx.fillStyle = "rgba(180, 210, 200, 0.55)";
+              ctx.fillRect(x, y, tile, tile);
+            }
+          }
+        }
+
+        // Side walls with wainscot
+        ctx.fillStyle = "#b8d4ce";
+        ctx.fillRect(0, 0, PLAY_LEFT - 6, H);
+        ctx.fillRect(PLAY_RIGHT + 6, 0, W - PLAY_RIGHT, H);
+        ctx.fillStyle = "#7aa39a";
+        ctx.fillRect(0, 0, PLAY_LEFT - 6, H);
+        ctx.fillRect(0, H * 0.55, PLAY_LEFT - 6, H * 0.45);
+        ctx.fillRect(PLAY_RIGHT + 6, 0, W - PLAY_RIGHT, H);
+        ctx.fillStyle = "#8fb5ae";
+        ctx.fillRect(PLAY_RIGHT + 6, H * 0.55, W - PLAY_RIGHT, H * 0.45);
+
+        // Wall stripe / handrail
+        ctx.fillStyle = "#5d8f86";
+        ctx.fillRect(PLAY_LEFT - 10, 0, 4, H);
+        ctx.fillRect(PLAY_RIGHT + 6, 0, 4, H);
+
+        // IV rail on ceiling
+        ctx.strokeStyle = "rgba(80, 110, 120, 0.45)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(PLAY_LEFT + 8, HUD_H + 8);
+        ctx.lineTo(PLAY_RIGHT - 8, HUD_H + 8);
+        ctx.stroke();
+
+        // Fluorescent lights + doors
+        const spacing = 150;
+        const scroll = scrollY * 1.1;
+        for (let i = -1; i < 8; i++) {
+          const ly = ((i * spacing - scroll) % (H + spacing)) - 20;
+
+          // Light
+          ctx.fillStyle = "rgba(255, 252, 230, 0.55)";
+          roundRect(W * 0.5 - 48, ly, 96, 14, 4);
+          ctx.fill();
+          ctx.fillStyle = "rgba(255, 255, 200, 0.2)";
+          ctx.beginPath();
+          ctx.ellipse(W * 0.5, ly + 28, 70, 22, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Door on left wall
+          const doorY = ly + 40;
+          ctx.fillStyle = "#cfd8dc";
+          ctx.fillRect(4, doorY, PLAY_LEFT - 12, 70);
+          ctx.strokeStyle = "#78909c";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(4, doorY, PLAY_LEFT - 12, 70);
+          ctx.fillStyle = "#fff8e1";
+          roundRect(6, doorY + 8, PLAY_LEFT - 16, 16, 2);
+          ctx.fill();
+          ctx.fillStyle = "#37474f";
+          ctx.font = "bold 9px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(ROOM_NUMBERS[(i + 8) % ROOM_NUMBERS.length], (PLAY_LEFT - 4) * 0.5, doorY + 20);
+
+          // Window strip on right
+          ctx.fillStyle = "rgba(160, 200, 210, 0.35)";
+          ctx.fillRect(PLAY_RIGHT + 10, doorY + 10, W - PLAY_RIGHT - 14, 40);
+          ctx.strokeStyle = "rgba(100, 140, 150, 0.4)";
+          ctx.strokeRect(PLAY_RIGHT + 10, doorY + 10, W - PLAY_RIGHT - 14, 40);
+        }
+
+        // Floor center line
+        ctx.strokeStyle = "rgba(42, 107, 99, 0.18)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([12, 10]);
+        ctx.beginPath();
+        ctx.moveTo(W * 0.5, HUD_H);
+        ctx.lineTo(W * 0.5, H);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      function drawSpeedStreaks() {
+        const ratio = (speed - SPEED_MIN) / (SPEED_MAX - SPEED_MIN);
+        if (ratio < 0.15) return;
+        const count = 4 + ((ratio * 10) | 0);
+        ctx.save();
+        for (let i = 0; i < count; i++) {
+          const x = (i * 47 + scrollY * 0.3) % W;
+          const len = 18 + ratio * 40 + (i % 3) * 8;
+          const y = (scrollY * (1.4 + (i % 4) * 0.2) + i * 90) % H;
+          ctx.strokeStyle = `rgba(255,255,255,${0.06 + ratio * 0.14})`;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x, y + len);
+          ctx.stroke();
+        }
+        // Side blur bands
+        const edge = ctx.createLinearGradient(0, 0, 30, 0);
+        edge.addColorStop(0, `rgba(20, 50, 46, ${0.15 + ratio * 0.25})`);
+        edge.addColorStop(1, "rgba(20, 50, 46, 0)");
+        ctx.fillStyle = edge;
+        ctx.fillRect(0, HUD_H, 30, H - HUD_H);
+        const edgeR = ctx.createLinearGradient(W, 0, W - 30, 0);
+        edgeR.addColorStop(0, `rgba(20, 50, 46, ${0.15 + ratio * 0.25})`);
+        edgeR.addColorStop(1, "rgba(20, 50, 46, 0)");
+        ctx.fillStyle = edgeR;
+        ctx.fillRect(W - 30, HUD_H, 30, H - HUD_H);
+        ctx.restore();
+      }
+
+      function drawReceipt(r) {
+        ctx.save();
+        ctx.translate(r.x, r.y);
+
+        ctx.fillStyle = "rgba(0,0,0,0.16)";
+        ctx.fillRect(3, 5, r.w, r.h);
+
+        ctx.fillStyle = "#fffef8";
+        ctx.strokeStyle = "#c5c0b0";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(r.w, 0);
+        ctx.lineTo(r.w, r.h - 10);
+        const zig = 6;
+        for (let x = r.w; x >= 0; x -= zig) {
+          ctx.lineTo(x - zig * 0.5, r.h - 4);
+          ctx.lineTo(x - zig, r.h - 10);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        const alertBlink = billingAlert > 0 && Math.floor(performance.now() / 120) % 2 === 0;
+        ctx.fillStyle = alertBlink ? "#ff1744" : "#c62828";
+        ctx.fillRect(4, 4, r.w - 8, 16);
+        if (alertBlink) {
+          ctx.strokeStyle = "#ff8a80";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(1, 1, r.w - 2, r.h - 2);
+        }
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 11px Trebuchet MS, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(alertBlink ? "お会計！" : "追加請求", r.w / 2, 16);
+
+        const lineStart = 28;
+        const lineEnd = r.h - 28;
+        const gap = Math.max(4, (lineEnd - lineStart) / Math.max(4, r.lineCount));
+        ctx.strokeStyle = "rgba(60, 60, 60, 0.45)";
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < r.lineCount; i++) {
+          const ly = lineStart + i * gap;
+          if (ly > lineEnd) break;
+          const inset = 8 + (i % 3) * 2;
+          ctx.beginPath();
+          ctx.moveTo(inset, ly);
+          ctx.lineTo(r.w - inset - 18, ly);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(r.w - inset - 14, ly);
+          ctx.lineTo(r.w - inset, ly);
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = "#c62828";
+        ctx.font = "bold 13px Trebuchet MS, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("+" + formatYen(r.charge), r.w / 2, r.h - 14);
+
+        ctx.restore();
+      }
+
+      function drawCoin(c) {
+        const cx = c.x + c.w * 0.5;
+        const cy = c.y + c.h * 0.5;
+        const squash = 0.65 + Math.abs(Math.cos(c.spin)) * 0.35;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(squash, 1);
+
+        ctx.fillStyle = "rgba(0,0,0,0.18)";
+        ctx.beginPath();
+        ctx.ellipse(2, 3, 13, 13, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        const g = ctx.createRadialGradient(-4, -4, 2, 0, 0, 14);
+        g.addColorStop(0, "#fff59d");
+        g.addColorStop(0.5, "#ffc107");
+        g.addColorStop(1, "#f57f17");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, 13, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#ff8f00";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = "#5d4037";
+        ctx.font = "bold 13px Trebuchet MS, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("¥", 0, 1);
+        ctx.textBaseline = "alphabetic";
+        ctx.restore();
+      }
+
+      function drawPlayer() {
+        const danger = billRatio();
+        const held = heldMoney();
+        let skin;
+        if (held < 0) {
+          skin = `rgb(${160}, ${190}, ${210})`;
+        } else if (danger > 0.7) {
+          skin = `rgb(${200 - danger * 40 | 0}, ${210 - danger * 50 | 0}, ${215})`;
+        } else if (held >= 30000 && danger < 0.4) {
+          skin = "#ffd7a8";
+        } else {
+          skin = "#ffcc80";
+        }
+        const halfW = PLAYER_W * 0.5;
+        const halfH = PLAYER_H * 0.5;
+
+        if (dashTimer > 0 || dashStyleTimer > 0) {
+          const dir = Math.sign(dashVx) || 1;
+          for (let g = 4; g >= 1; g--) {
+            ctx.save();
+            ctx.globalAlpha = 0.16 + g * 0.1;
+            ctx.translate(playerX - dir * g * 18, playerY);
+            ctx.rotate(playerTilt);
+            ctx.fillStyle = "#4db6ac";
+            roundRect(-halfW, -halfH + 2, PLAYER_W, PLAYER_H - 4, 8);
+            ctx.fill();
+            ctx.restore();
+          }
+        } else if (invuln > 0 && state !== STATE.DYING && state !== STATE.CLEARING) {
+          ctx.save();
+          ctx.globalAlpha = 0.45 + Math.sin(invuln * 40) * 0.25;
+        }
+
+        ctx.save();
+        ctx.translate(playerX, playerY);
+        ctx.rotate(playerTilt);
+
+        // IV stand (right side)
+        ctx.strokeStyle = "#78909c";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(halfW + 6, -halfH + 18);
+        ctx.lineTo(halfW + 6, -halfH - 18);
+        ctx.stroke();
+        ctx.fillStyle = "#90caf9";
+        ctx.beginPath();
+        ctx.moveTo(halfW, -halfH - 20);
+        ctx.lineTo(halfW + 12, -halfH - 20);
+        ctx.lineTo(halfW + 10, -halfH);
+        ctx.lineTo(halfW + 2, -halfH);
+        ctx.closePath();
+        ctx.fill();
+
+        // Bed frame (vertical)
+        ctx.fillStyle = "#cfd8dc";
+        ctx.strokeStyle = "#546e7a";
+        ctx.lineWidth = 2;
+        roundRect(-halfW, -halfH + 2, PLAYER_W, PLAYER_H - 4, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        // Mattress
+        ctx.fillStyle = "#e0f2f1";
+        roundRect(-halfW + 4, -halfH + 8, PLAYER_W - 8, PLAYER_H - 18, 6);
+        ctx.fill();
+
+        // Pillow (top)
+        ctx.fillStyle = "#fff8e7";
+        roundRect(-halfW + 7, -halfH + 10, PLAYER_W - 14, 16, 5);
+        ctx.fill();
+
+        // Head (top / center)
+        ctx.fillStyle = skin;
+        ctx.beginPath();
+        ctx.ellipse(0, -halfH + 22, 11, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Eyes
+        ctx.strokeStyle = "#5d4037";
+        ctx.lineWidth = 1.4;
+        if (state === STATE.DYING && dyingPhase >= 1) {
+          ctx.beginPath();
+          ctx.moveTo(-6, -halfH + 18);
+          ctx.lineTo(-2, -halfH + 22);
+          ctx.moveTo(-2, -halfH + 18);
+          ctx.lineTo(-6, -halfH + 22);
+          ctx.moveTo(2, -halfH + 18);
+          ctx.lineTo(6, -halfH + 22);
+          ctx.moveTo(6, -halfH + 18);
+          ctx.lineTo(2, -halfH + 22);
+          ctx.stroke();
+        } else if (held < 0) {
+          // Distressed eyes
+          ctx.beginPath();
+          ctx.moveTo(-7, -halfH + 19);
+          ctx.quadraticCurveTo(-4, -halfH + 24, -1, -halfH + 19);
+          ctx.moveTo(1, -halfH + 19);
+          ctx.quadraticCurveTo(4, -halfH + 24, 7, -halfH + 19);
+          ctx.stroke();
+        } else if (held >= 30000 && danger < 0.4) {
+          // Relieved soft smile eyes
+          ctx.beginPath();
+          ctx.moveTo(-6, -halfH + 21);
+          ctx.quadraticCurveTo(-4, -halfH + 18, -2, -halfH + 21);
+          ctx.moveTo(2, -halfH + 21);
+          ctx.quadraticCurveTo(4, -halfH + 18, 6, -halfH + 21);
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(-6, -halfH + 20);
+          ctx.quadraticCurveTo(-4, -halfH + 22, -2, -halfH + 20);
+          ctx.moveTo(2, -halfH + 20);
+          ctx.quadraticCurveTo(4, -halfH + 22, 6, -halfH + 20);
+          ctx.stroke();
+        }
+
+        // Blanket (lower body)
+        ctx.fillStyle = "#80cbc4";
+        roundRect(-halfW + 5, -halfH + 36, PLAYER_W - 10, halfH + 8, 5);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.35)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-halfW + 10, -halfH + 48);
+        ctx.lineTo(halfW - 10, -halfH + 48);
+        ctx.stroke();
+
+        // Arm peeking from blanket
+        ctx.strokeStyle = skin;
+        ctx.lineWidth = 4;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(halfW - 10, -halfH + 42);
+        ctx.quadraticCurveTo(halfW + 4, -halfH + 50, halfW - 2, -halfH + 58);
+        ctx.stroke();
+
+        // IV tube
+        ctx.strokeStyle = "rgba(100, 180, 220, 0.85)";
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(halfW + 6, -halfH - 4);
+        ctx.quadraticCurveTo(halfW + 14, -halfH + 30, halfW - 2, -halfH + 58);
+        ctx.stroke();
+        ctx.fillStyle = "#ef5350";
+        ctx.beginPath();
+        ctx.arc(halfW - 2, -halfH + 58, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        const sweatLevel = held < 0 ? 1 : danger;
+        if (sweatLevel > 0.35) {
+          ctx.fillStyle = "rgba(120, 180, 220, 0.75)";
+          const drops = held < 0 ? 5 : 1 + ((danger * 4) | 0);
+          for (let i = 0; i < drops; i++) {
+            ctx.beginPath();
+            ctx.ellipse(-12 - i * 2, -halfH + 14 + i * 3, 1.5, 2.5, 0.2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Wheels at bottom
+        ctx.fillStyle = "#37474f";
+        ctx.beginPath();
+        ctx.arc(-halfW + 8, halfH - 2, 6, 0, Math.PI * 2);
+        ctx.arc(halfW - 8, halfH - 2, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#90a4ae";
+        ctx.beginPath();
+        ctx.arc(-halfW + 8, halfH - 2, 2.5, 0, Math.PI * 2);
+        ctx.arc(halfW - 8, halfH - 2, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Motion streaks above head
+        ctx.strokeStyle = "rgba(255,255,255,0.4)";
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 3; i++) {
+          const lx = -10 + i * 10;
+          const len = 12 + (scrollY * 0.12 + i * 5) % 14;
+          ctx.beginPath();
+          ctx.moveTo(lx, -halfH);
+          ctx.lineTo(lx, -halfH - len);
+          ctx.stroke();
+        }
+
+        if (dashTimer > 0 || dashStyleTimer > 0) {
+          ctx.strokeStyle = "rgba(128, 203, 196, 0.75)";
+          ctx.lineWidth = 4;
+          for (let i = 0; i < 4; i++) {
+            ctx.beginPath();
+            ctx.moveTo(-Math.sign(dashVx || 1) * (halfW + 4 + i * 8), -20 + i * 12);
+            ctx.lineTo(-Math.sign(dashVx || 1) * (halfW + 22 + i * 9), -20 + i * 12);
+            ctx.stroke();
+          }
+        }
+
+        ctx.restore();
+        if (!(dashTimer > 0 || dashStyleTimer > 0) && invuln > 0 && state !== STATE.DYING) {
+          ctx.restore();
+        }
+      }
+
+      function drawHeartbeatMonitor(x, y, w, h, critical) {
+        ctx.fillStyle = "rgba(10, 20, 18, 0.75)";
+        roundRect(x, y, w, h, 4);
+        ctx.fill();
+        ctx.strokeStyle = critical ? "#ef5350" : "#66bb6a";
+        ctx.lineWidth = 1.5;
+        const t = performance.now() * 0.01;
+        ctx.beginPath();
+        for (let i = 0; i < w; i++) {
+          const px = x + i;
+          let py = y + h * 0.55;
+          const phase = (i / w) * Math.PI * 4 + t;
+          const beat = Math.sin(phase * 2);
+          if (beat > 0.85) py -= h * 0.35;
+          else if (beat > 0.7) py += h * 0.15;
+          else py += Math.sin(phase) * 2;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+
+      function drawNurse(n) {
+        const throwProg = Math.min(1, n.age / n.throwAt);
+        const fade = n.age > n.throwAt ? Math.max(0.35, 1 - (n.age - n.throwAt) / Math.max(0.01, n.maxLife - n.throwAt)) : 1;
+        ctx.save();
+        ctx.globalAlpha = fade;
+        ctx.translate(n.x, n.y);
+
+        ctx.fillStyle = n.danger ? "#ef9a9a" : "#eceff1";
+        roundRect(-16, 20, 32, 38, 6);
+        ctx.fill();
+        ctx.fillStyle = n.danger ? "#c62828" : "#e53935";
+        roundRect(-18, 18, 36, 12, 3);
+        ctx.fill();
+
+        ctx.fillStyle = "#ffcc80";
+        ctx.beginPath();
+        ctx.arc(0, 10, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#fff";
+        roundRect(-13, -4, 26, 12, 3);
+        ctx.fill();
+        ctx.fillStyle = n.danger ? "#b71c1c" : "#e53935";
+        ctx.fillRect(-2, -2, 4, 9);
+
+        ctx.fillStyle = "#5d4037";
+        ctx.beginPath();
+        ctx.arc(-4, 10, 1.3, 0, Math.PI * 2);
+        ctx.arc(4, 10, 1.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "#ffcc80";
+        ctx.lineWidth = 5;
+        ctx.lineCap = "round";
+        const armAngle = n.thrown ? 1.35 : (-0.9 + throwProg * 2.3);
+        ctx.beginPath();
+        ctx.moveTo(12, 30);
+        ctx.lineTo(12 + Math.cos(armAngle) * 24, 30 + Math.sin(armAngle) * 20);
+        ctx.stroke();
+
+        if (!n.thrown) {
+          ctx.fillStyle = n.kind === "coin" ? "#ffc107" : "#fffde7";
+          const hx = 12 + Math.cos(armAngle) * 24;
+          const hy = 30 + Math.sin(armAngle) * 20;
+          if (n.kind === "coin") {
+            ctx.beginPath();
+            ctx.arc(hx, hy, 7, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.fillRect(hx - 7, hy - 9, 14, 16);
+          }
+        }
+
+        if (n.age < 0.75) {
+          ctx.globalAlpha = fade * 0.95;
+          const bw = 76;
+          const bh = 22;
+          ctx.fillStyle = "#fff";
+          roundRect(-bw * 0.5, -28, bw, bh, 6);
+          ctx.fill();
+          ctx.fillStyle = n.danger ? "#c62828" : "#37474f";
+          ctx.font = "bold 11px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(n.quip || "追加よ！", 0, -13);
+        }
+
+        if (n.danger) {
+          ctx.fillStyle = "#ff1744";
+          ctx.font = "bold 10px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("危険ナース", 0, 68);
+        }
+
+        ctx.restore();
+      }
+
+      function drawHud() {
+        ctx.fillStyle = "rgba(20, 40, 38, 0.55)";
+        ctx.fillRect(0, 0, W, HUD_H);
+
+        const days = daysLeft();
+        const held = heldMoney();
+        ctx.fillStyle = days <= 10 ? "#ff8a80" : "#fff8e1";
+        ctx.font = "bold 16px Trebuchet MS, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("退院まであと " + days + "日", W * 0.5, 20);
+
+        if (bestScore != null) {
+          ctx.fillStyle = "rgba(255,255,255,0.55)";
+          ctx.font = "10px Trebuchet MS, sans-serif";
+          ctx.textAlign = "left";
+          ctx.fillText("BEST " + formatYen(bestScore), 8, 18);
+        }
+
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        ctx.font = "11px Trebuchet MS, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(
+          "収入 " + formatYen(income) + " − 請求 " + formatYen(bill),
+          W * 0.5,
+          38
+        );
+
+        const heldSize = 26 + Math.min(40, Math.abs(held) / 2500);
+        ctx.save();
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = held >= 0 ? "#80cbc4" : "#ff1744";
+        ctx.strokeStyle = "rgba(255,255,255,0.35)";
+        ctx.lineWidth = 3;
+        ctx.font = "bold " + heldSize + "px Trebuchet MS, sans-serif";
+        ctx.strokeText(formatYen(held), W * 0.5, 66);
+        ctx.fillText(formatYen(held), W * 0.5, 66);
+        ctx.fillStyle = "rgba(255,255,255,0.55)";
+        ctx.font = "10px Trebuchet MS, sans-serif";
+        ctx.fillText("所持金", W * 0.5, 82);
+        ctx.textBaseline = "alphabetic";
+        ctx.restore();
+
+        const dgX = W - 86;
+        const dgY = H - 22;
+        const dgW = 74;
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        roundRect(dgX - 2, dgY - 2, dgW + 4, 12, 4);
+        ctx.fill();
+        const ready = dashCooldown <= 0 && dashTimer <= 0;
+        const dashing = dashTimer > 0 || dashStyleTimer > 0;
+        ctx.fillStyle = dashing ? "#26a69a" : ready ? "#80cbc4" : "#ffb74d";
+        const ratio = dashing ? 1 : ready ? 1 : 1 - dashCooldown / DASH_COOLDOWN_MAX;
+        roundRect(dgX, dgY, Math.max(2, dgW * ratio), 8, 3);
+        ctx.fill();
+        ctx.fillStyle = dashing ? "#e0f2f1" : "rgba(255,255,255,0.85)";
+        ctx.font = "bold 10px Trebuchet MS, sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText(dashing ? "DASH!" : ready ? "DASH OK" : "DASH", W - 12, dgY - 3);
+
+        if (billRatio() > 0.7 && state === STATE.PLAYING) {
+          drawHeartbeatMonitor(W - 86, 8, 74, 18, true);
+        }
+
+        // Held money gauge (right side)
+        const gX = W - 18;
+        const gY = HUD_H + 40;
+        const gH = 120;
+        const gW = 8;
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        roundRect(gX, gY, gW, gH, 3);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.25)";
+        ctx.fillRect(gX, gY + gH * 0.5 - 1, gW, 2);
+        const clamped = Math.max(-BILL_LIMIT, Math.min(BILL_LIMIT, held));
+        const mid = gY + gH * 0.5;
+        const fillH = (Math.abs(clamped) / BILL_LIMIT) * (gH * 0.5);
+        if (clamped >= 0) {
+          ctx.fillStyle = heldFlash > 0 ? "#b2dfdb" : "#26a69a";
+          ctx.fillRect(gX + 1, mid - fillH, gW - 2, Math.max(2, fillH));
+        } else {
+          ctx.fillStyle = heldFlash > 0 ? "#ff8a80" : "#e53935";
+          ctx.fillRect(gX + 1, mid, gW - 2, Math.max(2, fillH));
+        }
+        ctx.fillStyle = "rgba(255,255,255,0.55)";
+        ctx.font = "8px Trebuchet MS, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("±", gX + 4, gY - 4);
+      }
+
+      function drawIncomeBillBars(cx, topY) {
+        const maxV = Math.max(1, income, bill, 1000);
+        const barW = 140;
+        const incW = Math.max(8, (income / maxV) * barW);
+        const billW = Math.max(8, (bill / maxV) * barW);
+        ctx.textAlign = "left";
+        ctx.fillStyle = "rgba(255,255,255,0.75)";
+        ctx.font = "11px Trebuchet MS, sans-serif";
+        ctx.fillText("収入", cx - 70, topY);
+        ctx.fillStyle = "rgba(0,0,0,0.25)";
+        roundRect(cx - 30, topY - 10, barW, 10, 3);
+        ctx.fill();
+        ctx.fillStyle = "#80cbc4";
+        roundRect(cx - 30, topY - 10, incW, 10, 3);
+        ctx.fill();
+        ctx.fillStyle = "#e0f2f1";
+        ctx.textAlign = "right";
+        ctx.fillText(formatYen(income), cx + 130, topY);
+
+        ctx.textAlign = "left";
+        ctx.fillStyle = "rgba(255,255,255,0.75)";
+        ctx.fillText("請求", cx - 70, topY + 22);
+        ctx.fillStyle = "rgba(0,0,0,0.25)";
+        roundRect(cx - 30, topY + 12, barW, 10, 3);
+        ctx.fill();
+        ctx.fillStyle = "#ef5350";
+        roundRect(cx - 30, topY + 12, billW, 10, 3);
+        ctx.fill();
+        ctx.fillStyle = "#ffcdd2";
+        ctx.textAlign = "right";
+        ctx.fillText(formatYen(bill), cx + 130, topY + 22);
+        ctx.textAlign = "center";
+      }
+
+      function drawHitItemFlash() {
+        if (!hitItemFlash) return;
+        const p = 1 - hitItemFlash.life / hitItemFlash.maxLife;
+        const a = p < 0.65 ? 1 : (1 - p) / 0.35;
+        const scale = 1.15 - p * 0.25;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, a);
+        ctx.translate(W * 0.5, H * 0.36);
+        ctx.scale(scale, scale);
+        ctx.fillStyle = "rgba(40, 8, 8, 0.55)";
+        roundRect(-150, -22, 300, 44, 8);
+        ctx.fill();
+        ctx.fillStyle = "#ffcdd2";
+        ctx.font = "bold 18px Trebuchet MS, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(hitItemFlash.text, 0, 6);
+        ctx.restore();
+      }
+
+      function drawMilestoneFlash() {
+        if (!milestoneFlash) return;
+        const p = 1 - milestoneFlash.life / milestoneFlash.maxLife;
+        const a = p < 0.7 ? 1 : (1 - p) / 0.3;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, a);
+        ctx.fillStyle = "rgba(20, 10, 10, 0.45)";
+        ctx.fillRect(0, H * 0.4, W, 48);
+        ctx.fillStyle = "#ff8a80";
+        ctx.font = "bold 26px Trebuchet MS, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(milestoneFlash.text, W * 0.5, H * 0.4 + 34);
+        ctx.restore();
+      }
+
+      function drawBillPop() {
+        if (!billPop) return;
+        const p = 1 - billPop.life / billPop.maxLife;
+        const scale = 1.4 - p * 0.9;
+        const y = H * 0.42 + p * (58 - H * 0.42);
+        const a = p < 0.7 ? 1 : (1 - p) / 0.3;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, a);
+        ctx.translate(W * 0.5, y);
+        ctx.scale(scale, scale);
+        ctx.fillStyle = "#ff1744";
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 3;
+        ctx.font = "bold 36px Trebuchet MS, sans-serif";
+        ctx.textAlign = "center";
+        ctx.strokeText("+" + formatYen(billPop.amount), 0, 0);
+        ctx.fillText("+" + formatYen(billPop.amount), 0, 0);
+        ctx.restore();
+      }
+
+      function drawStackedReceipts() {
+        if (stackedReceipts.length === 0) return;
+
+        const hidden = Math.max(0, stackedReceipts.length - MAX_STACK_VISIBLE);
+        const visible = stackedReceipts.slice(-MAX_STACK_VISIBLE);
+        const cardW = Math.min(360, W - 24);
+        const cardX = (W - cardW) / 2;
+
+        if (hidden > 0) {
+          ctx.fillStyle = "rgba(40, 20, 20, 0.75)";
+          roundRect(cardX + 12, H - 10 - visible.length * (STACK_CARD_H - 10) - 22, cardW - 24, 18, 4);
+          ctx.fill();
+          ctx.fillStyle = "#ffcdd2";
+          ctx.font = "11px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("ほか " + hidden + " 件の理不尽明細…", W / 2, H - 10 - visible.length * (STACK_CARD_H - 10) - 9);
+        }
+
+        for (let i = 0; i < visible.length; i++) {
+          const s = visible[i];
+          const cardY = H - 8 - (i + 1) * (STACK_CARD_H - 8);
+          ctx.fillStyle = "rgba(255, 253, 245, 0.94)";
+          ctx.strokeStyle = "#c62828";
+          ctx.lineWidth = 2;
+          roundRect(cardX, cardY, cardW, STACK_CARD_H - 10, 6);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = "#c62828";
+          ctx.fillRect(cardX + 4, cardY + 4, cardW - 8, 14);
+          ctx.fillStyle = "#fff";
+          ctx.font = "bold 11px Trebuchet MS, sans-serif";
+          ctx.textAlign = "left";
+          ctx.fillText("追加請求明細", cardX + 10, cardY + 14);
+          ctx.textAlign = "right";
+          ctx.fillText(formatYen(s.charge), cardX + cardW - 10, cardY + 14);
+
+          ctx.fillStyle = "#333";
+          ctx.font = "12px Trebuchet MS, sans-serif";
+          ctx.textAlign = "left";
+          const show = s.items.slice(0, 2);
+          let ty = cardY + 30;
+          for (const item of show) {
+            const name = item.name.length > 14 ? item.name.slice(0, 14) + "…" : item.name;
+            ctx.fillText("・" + name, cardX + 10, ty);
+            ctx.textAlign = "right";
+            ctx.fillStyle = "#c62828";
+            ctx.fillText(formatYen(item.amount), cardX + cardW - 10, ty);
+            ctx.textAlign = "left";
+            ctx.fillStyle = "#333";
+            ty += 14;
+          }
+          if (s.items.length > 2) {
+            ctx.fillStyle = "#888";
+            ctx.font = "10px Trebuchet MS, sans-serif";
+            ctx.fillText("…ほか " + (s.items.length - 2) + " 項目", cardX + 10, ty);
+          }
+        }
+      }
+
+      function drawFloatTexts() {
+        for (const f of floatTexts) {
+          const a = Math.max(0, f.life / f.maxLife);
+          ctx.save();
+          ctx.translate(f.x, f.y);
+          ctx.rotate(f.rot || 0);
+          ctx.globalAlpha = a * 0.9;
+          ctx.fillStyle = f.color || "#c62828";
+          ctx.strokeStyle = "rgba(255,255,255,0.5)";
+          ctx.lineWidth = 3;
+          ctx.font = `bold ${f.size}px Trebuchet MS, sans-serif`;
+          ctx.textAlign = "center";
+          ctx.strokeText(f.text, 0, 0);
+          ctx.fillText(f.text, 0, 0);
+          ctx.restore();
+        }
+      }
+
+      function drawParticles() {
+        for (const p of particles) {
+          ctx.globalAlpha = Math.max(0, p.life * 2);
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function drawSkull(cx, cy, scale) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(scale, scale);
+        ctx.fillStyle = "#eceff1";
+        ctx.beginPath();
+        ctx.ellipse(0, -8, 28, 26, 0, 0, Math.PI * 2);
+        ctx.fill();
+        roundRect(-18, 8, 36, 22, 6);
+        ctx.fill();
+        ctx.fillStyle = "#212121";
+        ctx.beginPath();
+        ctx.ellipse(-10, -6, 7, 8, 0, 0, Math.PI * 2);
+        ctx.ellipse(10, -6, 7, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(0, 2);
+        ctx.lineTo(-5, 12);
+        ctx.lineTo(5, 12);
+        ctx.closePath();
+        ctx.fill();
+        // Teeth
+        ctx.strokeStyle = "#212121";
+        ctx.lineWidth = 2;
+        for (let i = -2; i <= 2; i++) {
+          ctx.beginPath();
+          ctx.moveTo(i * 6, 18);
+          ctx.lineTo(i * 6, 26);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawDying() {
+        const progress = 1 - Math.max(0, dyingTimer) / DYING_DURATION;
+        const dark = Math.min(0.55, 0.25 + progress * 0.4);
+        ctx.fillStyle = `rgba(20, 4, 8, ${dark})`;
+        ctx.fillRect(0, 0, W, H);
+        drawLifeFlash(0.9);
+
+        // ECG line
+        ctx.strokeStyle = progress < 0.55 ? "#ef5350" : "#b71c1c";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        const baseY = H * 0.38;
+        for (let i = 0; i < W; i++) {
+          let py = baseY;
+          if (progress < 0.55) {
+            const phase = (i / W) * Math.PI * 6 + performance.now() * 0.012;
+            const beat = Math.sin(phase * 2);
+            if (beat > 0.82) py -= 28;
+            else if (beat > 0.65) py += 10;
+          } else {
+            py = baseY;
+          }
+          if (i === 0) ctx.moveTo(i, py);
+          else ctx.lineTo(i, py);
+        }
+        ctx.stroke();
+
+        if (progress >= 0.45) {
+          const skullA = Math.min(1, (progress - 0.45) / 0.25);
+          ctx.globalAlpha = skullA;
+          drawSkull(W / 2, H * 0.58, 1.15 + progress * 0.2);
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = "#ffcdd2";
+          ctx.font = "bold 22px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("心電図停止…", W / 2, H * 0.72);
+          ctx.fillStyle = "#ef9a9a";
+          ctx.font = "14px Trebuchet MS, sans-serif";
+          ctx.fillText("高額請求により死亡", W / 2, H * 0.78);
+        } else {
+          ctx.fillStyle = "#ff8a80";
+          ctx.font = "bold 18px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("請求額臨界… バイタル低下", W / 2, H * 0.7);
+        }
+      }
+
+      function drawClearing() {
+        const progress = 1 - Math.max(0, clearTimer) / CLEAR_DURATION;
+        ctx.fillStyle = `rgba(230, 250, 240, ${0.25 + progress * 0.35})`;
+        ctx.fillRect(0, 0, W, H);
+
+        const glow = ctx.createRadialGradient(W * 0.5, H * 0.35, 20, W * 0.5, H * 0.35, H * 0.55);
+        glow.addColorStop(0, "rgba(255, 236, 160, 0.45)");
+        glow.addColorStop(1, "rgba(255, 236, 160, 0)");
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.fillStyle = "#2e7d32";
+        ctx.font = "bold 28px Trebuchet MS, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("退院決定！", W / 2, H * 0.22);
+        ctx.fillStyle = "#455a64";
+        ctx.font = "14px Trebuchet MS, sans-serif";
+        ctx.fillText("ベッドが出口へ向かう…", W / 2, H * 0.27);
+
+        if (clearStamp > 0) {
+          const t = Math.min(1, clearStamp);
+          const ease = 1 - Math.pow(1 - t, 3);
+          const scale = 2.4 - ease * 1.35;
+          ctx.save();
+          ctx.translate(W * 0.5, H * 0.48);
+          ctx.rotate(-0.18);
+          ctx.scale(scale, scale);
+          ctx.globalAlpha = Math.min(1, t * 1.4);
+          ctx.strokeStyle = "#c62828";
+          ctx.fillStyle = "rgba(198, 40, 40, 0.12)";
+          ctx.lineWidth = 4;
+          roundRect(-78, -36, 156, 72, 8);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = "#c62828";
+          ctx.font = "bold 28px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("退院許可", 0, 8);
+          ctx.restore();
+        }
+      }
+
+      function drawOverlayTitle() {
+        ctx.fillStyle = "rgba(10, 30, 28, 0.62)";
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.fillStyle = "#e8f5f2";
+        ctx.font = "bold 24px Trebuchet MS, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("高額請求病院", W / 2, H * 0.2);
+        ctx.font = "bold 14px Trebuchet MS, sans-serif";
+        ctx.fillStyle = "#ff8a80";
+        ctx.fillText("暴走ベッドでレシートを避けろ！", W / 2, H * 0.2 + 26);
+
+        ctx.save();
+        ctx.translate(W / 2, H * 0.4);
+        ctx.rotate(-0.03);
+        // Vertical mini bed preview (head on top)
+        ctx.fillStyle = "#cfd8dc";
+        roundRect(-22, -40, 44, 80, 8);
+        ctx.fill();
+        ctx.fillStyle = "#fff8e7";
+        roundRect(-16, -34, 32, 14, 4);
+        ctx.fill();
+        ctx.fillStyle = "#ffcc80";
+        ctx.beginPath();
+        ctx.ellipse(0, -22, 10, 9, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#80cbc4";
+        roundRect(-16, -8, 32, 36, 5);
+        ctx.fill();
+        ctx.fillStyle = "#37474f";
+        ctx.beginPath();
+        ctx.arc(-14, 38, 5, 0, Math.PI * 2);
+        ctx.arc(14, 38, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        ctx.fillStyle = "#fff";
+        ctx.font = "13px Trebuchet MS, sans-serif";
+        ctx.fillText("60日間レシートを避けて生き残れ", W / 2, H * 0.56);
+        ctx.fillStyle = "#ffd54f";
+        ctx.font = "12px Trebuchet MS, sans-serif";
+        ctx.fillText("収入 − 請求 ＝ 所持金がスコア", W / 2, H * 0.61);
+        ctx.fillStyle = "#ffcdd2";
+        ctx.fillText("所持金が " + formatYen(HELD_FLOOR) + " でゲームオーバー", W / 2, H * 0.66);
+
+        ctx.fillStyle = "#80cbc4";
+        ctx.font = "bold 15px Trebuchet MS, sans-serif";
+        const pulse = 0.7 + Math.sin(performance.now() * 0.006) * 0.3;
+        ctx.globalAlpha = pulse;
+        ctx.fillText("タップ / Space でスタート", W / 2, H * 0.74);
+        ctx.globalAlpha = 1;
+
+        if (bestScore != null) {
+          ctx.fillStyle = "rgba(255,255,255,0.75)";
+          ctx.font = "12px Trebuchet MS, sans-serif";
+          ctx.fillText("ベストスコア " + formatYen(bestScore), W / 2, H * 0.82);
+        }
+      }
+
+      function drawOverlayGameover() {
+        const summary = getAccountingSummary();
+        const compare = getCompareText();
+        const held = heldMoney();
+        const title = getRankTitle(held, cleared);
+
+        if (cleared) {
+          ctx.fillStyle = "rgba(8, 48, 40, 0.82)";
+          ctx.fillRect(0, 0, W, H);
+          const sun = ctx.createRadialGradient(W * 0.5, H * 0.2, 10, W * 0.5, H * 0.2, H * 0.5);
+          sun.addColorStop(0, "rgba(255, 236, 160, 0.35)");
+          sun.addColorStop(1, "rgba(255, 236, 160, 0)");
+          ctx.fillStyle = sun;
+          ctx.fillRect(0, 0, W, H);
+
+          ctx.fillStyle = "#ffd54f";
+          ctx.font = "bold 28px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("無事退院！", W / 2, H * 0.16);
+          ctx.fillStyle = "#80cbc4";
+          ctx.font = "bold 18px Trebuchet MS, sans-serif";
+          ctx.fillText("【" + title + "】", W / 2, H * 0.215);
+
+          ctx.fillStyle = "rgba(255,255,255,0.8)";
+          ctx.font = "12px Trebuchet MS, sans-serif";
+          ctx.fillText("所持金（スコア）", W / 2, H * 0.27);
+          ctx.fillStyle = held >= 0 ? "#80cbc4" : "#ff1744";
+          ctx.font = "bold 34px Trebuchet MS, sans-serif";
+          ctx.fillText(formatYen(held), W / 2, H * 0.335);
+
+          drawIncomeBillBars(W / 2, H * 0.4);
+
+          ctx.fillStyle = "rgba(255,255,255,0.75)";
+          ctx.font = "11px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(summary, W / 2, H * 0.5);
+
+          if (isNewRecord) {
+            ctx.fillStyle = "#ffd54f";
+            ctx.font = "bold 14px Trebuchet MS, sans-serif";
+            ctx.fillText("NEW RECORD! ベストスコア更新", W / 2, H * 0.56);
+          } else if (bestScore != null) {
+            ctx.fillStyle = "rgba(255,255,255,0.7)";
+            ctx.font = "12px Trebuchet MS, sans-serif";
+            ctx.fillText("ベストスコア " + formatYen(bestScore), W / 2, H * 0.56);
+          }
+
+          if (compare) {
+            ctx.fillStyle = compare.indexOf("多い") >= 0 ? "#80cbc4" : "#ffcc80";
+            ctx.font = "12px Trebuchet MS, sans-serif";
+            ctx.fillText(compare, W / 2, H * 0.61);
+          }
+
+          ctx.fillStyle = "#80cbc4";
+          ctx.font = "bold 15px Trebuchet MS, sans-serif";
+          const pulse = 0.7 + Math.sin(performance.now() * 0.006) * 0.3;
+          ctx.globalAlpha = pulse;
+          ctx.fillText("タップ / R でリトライ", W / 2, H * 0.74);
+          ctx.globalAlpha = 1;
+          return;
+        }
+
+        ctx.fillStyle = "rgba(40, 8, 8, 0.55)";
+        ctx.fillRect(0, 0, W, H);
+        drawLifeFlash(0.92);
+        ctx.fillStyle = "rgba(40, 8, 8, 0.28)";
+        ctx.fillRect(0, 0, W, H);
+
+        drawSkull(W / 2, H * 0.12, 0.5);
+
+        ctx.fillStyle = "#ffcdd2";
+        ctx.font = "bold 24px Trebuchet MS, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("破産…", W / 2, H * 0.22);
+        ctx.fillStyle = "#ef9a9a";
+        ctx.font = "bold 16px Trebuchet MS, sans-serif";
+        ctx.fillText("【" + title + "】", W / 2, H * 0.27);
+
+        ctx.fillStyle = "rgba(255,255,255,0.8)";
+        ctx.font = "12px Trebuchet MS, sans-serif";
+        ctx.fillText("所持金", W / 2, H * 0.32);
+        ctx.fillStyle = held >= 0 ? "#ffcc80" : "#ff1744";
+        ctx.font = "bold 32px Trebuchet MS, sans-serif";
+        ctx.fillText(formatYen(held), W / 2, H * 0.38);
+
+        drawIncomeBillBars(W / 2, H * 0.44);
+
+        ctx.fillStyle = "rgba(255,255,255,0.75)";
+        ctx.font = "11px Trebuchet MS, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(summary, W / 2, H * 0.54);
+
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        ctx.font = "12px Trebuchet MS, sans-serif";
+        ctx.fillText("耐えた日数 " + Math.floor(surviveSec) + "日", W / 2, H * 0.59);
+
+        if (isNewRecord) {
+          ctx.fillStyle = "#ffd54f";
+          ctx.font = "bold 13px Trebuchet MS, sans-serif";
+          ctx.fillText("NEW RECORD!", W / 2, H * 0.64);
+        } else if (bestScore != null) {
+          ctx.fillStyle = "rgba(255,255,255,0.65)";
+          ctx.font = "12px Trebuchet MS, sans-serif";
+          ctx.fillText("ベストスコア " + formatYen(bestScore), W / 2, H * 0.64);
+        }
+
+        if (compare) {
+          ctx.fillStyle = "#ffcc80";
+          ctx.font = "12px Trebuchet MS, sans-serif";
+          ctx.fillText(compare, W / 2, H * 0.69);
+        }
+
+        ctx.fillStyle = "#80cbc4";
+        ctx.font = "bold 15px Trebuchet MS, sans-serif";
+        const pulse = 0.7 + Math.sin(performance.now() * 0.006) * 0.3;
+        ctx.globalAlpha = pulse;
+        ctx.fillText("タップ / R でリトライ", W / 2, H * 0.8);
+        ctx.globalAlpha = 1;
+      }
+
+      function draw() {
+        drawCorridor();
+        drawSpeedStreaks();
+
+        for (const n of nurses) drawNurse(n);
+        for (const r of receipts) drawReceipt(r);
+        for (const c of coins) drawCoin(c);
+        if (
+          state === STATE.PLAYING ||
+          state === STATE.DYING ||
+          state === STATE.CLEARING ||
+          state === STATE.GAMEOVER
+        ) {
+          drawPlayer();
+        }
+        drawParticles();
+        drawFloatTexts();
+        if (state === STATE.PLAYING || state === STATE.CLEARING) {
+          drawHud();
+        }
+        drawStackedReceipts();
+        drawBillPop();
+        drawHitItemFlash();
+        drawMilestoneFlash();
+
+        if (state === STATE.PLAYING || state === STATE.DYING) {
+          const br = billRatio();
+          if (br > 0.02) {
+            let alpha = br * 0.45;
+            if (br > 0.7) {
+              alpha += 0.06 + Math.sin(performance.now() * 0.012) * 0.05;
+            }
+            ctx.fillStyle = `rgba(180, 20, 30, ${Math.min(0.62, alpha)})`;
+            ctx.fillRect(0, 0, W, H);
+            const vig = ctx.createRadialGradient(W * 0.5, H * 0.5, H * 0.2, W * 0.5, H * 0.5, H * 0.75);
+            vig.addColorStop(0, "rgba(120, 0, 0, 0)");
+            vig.addColorStop(1, `rgba(80, 0, 0, ${br * 0.35})`);
+            ctx.fillStyle = vig;
+            ctx.fillRect(0, 0, W, H);
+          }
+        }
+
+        if (state === STATE.PLAYING && daysLeft() <= 10) {
+          const pulse = 0.35 + Math.sin(performance.now() * 0.014) * 0.25;
+          ctx.strokeStyle = `rgba(255, 23, 68, ${pulse})`;
+          ctx.lineWidth = 8;
+          ctx.strokeRect(4, 4, W - 8, H - 8);
+          ctx.strokeStyle = `rgba(255, 138, 128, ${pulse * 0.7})`;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(10, 10, W - 20, H - 20);
+        }
+
+        if (flash > 0) {
+          ctx.fillStyle = `rgba(198, 40, 40, ${flash * 0.55})`;
+          ctx.fillRect(0, 0, W, H);
+        }
+        if (healFlash > 0) {
+          ctx.fillStyle = `rgba(76, 175, 80, ${healFlash * 0.35})`;
+          ctx.fillRect(0, 0, W, H);
+        }
+
+        if (state === STATE.TITLE) drawOverlayTitle();
+        if (state === STATE.DYING) drawDying();
+        if (state === STATE.CLEARING) drawClearing();
+        if (state === STATE.GAMEOVER) drawOverlayGameover();
+      }
+
+      function clearJust() {
+        for (const k of Object.keys(keysJust)) delete keysJust[k];
+        tapPending = false;
+      }
+
+      function loop(now) {
+        const dt = Math.min(0.033, (now - lastTime) / 1000 || 0.016);
+        lastTime = now;
+
+        if (state === STATE.TITLE) {
+          if (keysJust.Space || keysJust.Enter || tapPending) startGame();
+        } else if (state === STATE.PLAYING) {
+          updatePlaying(dt);
+        } else if (state === STATE.DYING) {
+          updateDying(dt);
+        } else if (state === STATE.CLEARING) {
+          updateClearing(dt);
+        } else if (state === STATE.GAMEOVER) {
+          if (!cleared) lifeFlashOffset += dt * 40;
+          if (keysJust.Space || keysJust.Enter || keysJust.KeyR || tapPending) startGame();
+        }
+
+        draw();
+        clearJust();
+        requestAnimationFrame(loop);
+      }
+
+      function canvasXFromEvent(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.clientX != null ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+        const scale = W / rect.width;
+        return (clientX - rect.left) * scale;
+      }
+
+      window.addEventListener("keydown", (e) => {
+        if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "KeyA", "KeyD", "KeyW", "KeyS", "KeyR", "Enter"].includes(e.code)) {
+          e.preventDefault();
+        }
+        if (!keys[e.code]) {
+          keysJust[e.code] = true;
+          if (e.code === "Space") {
+            ensureAudio();
+            if (state === STATE.PLAYING) tryDash();
+          }
+        }
+        keys[e.code] = true;
+      });
+
+      window.addEventListener("keyup", (e) => {
+        keys[e.code] = false;
+      });
+
+      canvas.addEventListener("pointerdown", (e) => {
+        ensureAudio();
+        canvas.setPointerCapture(e.pointerId);
+        pointerActive = true;
+        pointerX = canvasXFromEvent(e);
+        const now = performance.now();
+        if (state === STATE.PLAYING && now - lastTapAt < 280) {
+          tryDash();
+          lastTapAt = 0;
+        } else {
+          lastTapAt = now;
+          tapPending = true;
+        }
+      });
+
+      canvas.addEventListener("pointermove", (e) => {
+        if (!pointerActive) return;
+        pointerX = canvasXFromEvent(e);
+      });
+
+      canvas.addEventListener("pointerup", () => {
+        pointerActive = false;
+        pointerX = null;
+      });
+
+      canvas.addEventListener("pointercancel", () => {
+        pointerActive = false;
+        pointerX = null;
+      });
+
+      if (shareBtn) {
+        shareBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          openXShare();
+        });
+      }
+
+      setShareVisible(false);
+      lastTime = performance.now();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>

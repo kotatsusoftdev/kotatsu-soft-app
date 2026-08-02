@@ -400,6 +400,30 @@
       transform: scale(1.05);
     }
 
+    .thumb.receipt_bed_dash {
+      color: transparent;
+      text-shadow: none;
+      font-size: 0;
+      background-color: #2a6b63;
+    }
+
+    .thumb.receipt_bed_dash::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: url("./assets/003_receipt_bed_dash.png");
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      transition: transform 280ms ease;
+      will-change: transform;
+    }
+
+    .game-card:hover .thumb.receipt_bed_dash::before,
+    .game-card:focus-within .thumb.receipt_bed_dash::before {
+      transform: scale(1.05);
+    }
+
     .game-card h3 {
       margin: 0;
       font-family: "DotGothic16", sans-serif;
@@ -901,6 +925,31 @@
                 <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">🎬 開発動画</a>
                 <a class="action-btn spec-link" data-game-id="heavy_love_snake" href="./shared/spec.html?file=spec_マリオっぽい2Dスクロールゲームと_好きすぎて滅_を掛け合わせたゲーム_20260730_205037.md" target="_blank" rel="noopener noreferrer">📄 AI仕様書</a>
                 <a class="action-btn meeting-link" data-game-id="heavy_love_snake" href="./shared/meeting.html?file=meeting_マリオっぽい2Dスクロールゲームと_好きすぎて滅_を掛け合わせたゲーム_20260730_205037.jsonl" target="_blank" rel="noopener noreferrer">💬 会議ログ</a>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="game-card fade-up">
+          <a
+            class="game-card-link"
+            href="./003_receipt_bed_dash/src/index.html"
+            data-game-id="receipt_bed_dash"
+          >高額請求病院を遊ぶ</a>
+          <div class="thumb receipt_bed_dash" aria-hidden="true"></div>
+          <h3>高額請求病院：暴走ベッドでレシートを避けろ！</h3>
+          <p>ナースが投げつける理不尽レシートを回避！収入−請求＝所持金がスコア。60日生還を目指せ。</p>
+          <div class="card-footer">
+            <div class="actions">
+              <span class="pill">Hospital Runner</span>
+              <span class="pill play-count play-count-receipt_bed_dash" data-stat-id="receipt_bed_dash" aria-live="polite">🎮 -回プレイ</span>
+            </div>
+            <div class="card-actions-group">
+              <a class="action-btn play" data-game-id="receipt_bed_dash" href="./003_receipt_bed_dash/src/index.html">今すぐ遊ぶ (Play)</a>
+              <div class="sub-actions">
+                <a class="action-btn youtube-link" href="https://youtube.com/channel/UC6WGVic5SeST8yGDE7zvjKA?si=A2K3WcAdq85CQoFI" target="_blank" rel="noopener noreferrer">🎬 開発動画</a>
+                <a class="action-btn spec-link" data-game-id="receipt_bed_dash" href="./shared/spec.html?file=spec_お会計オプション地獄_暴走ベッドでレシートを避けろ_20260802_113315.md" target="_blank" rel="noopener noreferrer">📄 AI仕様書</a>
+                <a class="action-btn meeting-link" data-game-id="receipt_bed_dash" href="./shared/meeting.html?file=meeting_お会計オプション地獄_暴走ベッドでレシートを避けろ_20260802_113315.jsonl" target="_blank" rel="noopener noreferrer">💬 会議ログ</a>
               </div>
             </div>
           </div>

@@ -17,9 +17,12 @@ from market_research import MarketResearchError, MarketResearcher
 from post_mortem import LessonUpdate, format_lesson_items, run_post_mortem
 from spec_link_registry import get_latest_linked_game
 from theme_proposal import (
+    MeetingThemeParts,
     ThemeProposalError,
     ThemeProposer,
-    build_meeting_theme_text,
+    build_meeting_theme_parts,
+    meeting_theme_parts_from_free_text,
+    meeting_theme_parts_from_text,
 )
 from agents.dev.agent import DevAgent
 from agents.marketing.agent import MarketingAgent
@@ -643,7 +646,7 @@ async def resolve_market_research_channel() -> Optional[discord.TextChannel]:
 
 
 async def start_meeting_from_theme(
-    theme: str,
+    theme: str | MeetingThemeParts,
     *,
     order_channel: discord.abc.Messageable,
     already_reserved: bool = False,
@@ -667,12 +670,20 @@ async def start_meeting_from_theme(
             )
             return
 
-    short_theme = theme.strip().splitlines()[0] if theme.strip() else theme
+    parts = (
+        theme
+        if isinstance(theme, MeetingThemeParts)
+        else meeting_theme_parts_from_text(theme)
+    )
     await channel.send(
-        f"📥 了解しました。テーマ「{short_theme}」でただちにPM AIへ仕様策定を回します。"
+        f"📥 了解しました。テーマ「{parts.title}」でただちにPM AIへ仕様策定を回します。"
     )
     try:
-        await run_meeting_round(theme, channel)
+        await run_meeting_round(
+            parts.theme_for_agents,
+            channel,
+            theme_parts=parts,
+        )
     finally:
         await _release_meeting_channel(channel.id)
 
@@ -960,10 +971,9 @@ class ThemeOptionSelectView(discord.ui.View):
             if interaction.message is not None:
                 await interaction.message.edit(view=self)
 
-            theme = build_meeting_theme_text(option)
-            title = str(option.get("title") or "選択案")
+            parts = build_meeting_theme_parts(option)
             await interaction.response.send_message(
-                f"✅ 「{title}」で企画会議を開始します。",
+                f"✅ 「{parts.title}」で企画会議を開始します。",
                 ephemeral=False,
             )
             meeting_channel = await resolve_text_channel(self.meeting_channel_id)
@@ -975,7 +985,7 @@ class ThemeOptionSelectView(discord.ui.View):
                 return
             self._holds_reservation = False
             await start_meeting_from_theme(
-                theme,
+                parts,
                 order_channel=order_channel,
                 already_reserved=True,
                 meeting_channel=meeting_channel,
@@ -1136,7 +1146,7 @@ class MeetingThemeModal(discord.ui.Modal, title="企画会議のテーマ"):
         order_channel = interaction.channel or meeting_channel
         try:
             await start_meeting_from_theme(
-                theme,
+                meeting_theme_parts_from_free_text(theme),
                 order_channel=order_channel,
                 already_reserved=self.already_reserved,
                 meeting_channel=meeting_channel,
@@ -1234,6 +1244,7 @@ async def run_meeting_round(
     theme: str,
     meeting_channel: discord.TextChannel,
     revision_guidance: Optional[str] = None,
+    theme_parts: Optional[MeetingThemeParts] = None,
 ) -> None:
     cfg = _get_config_or_raise()
     workspace_root = Path(__file__).resolve().parent
@@ -1264,9 +1275,19 @@ async def run_meeting_round(
         president_mention=cfg.PRESIDENT_MENTION,
     )
 
-    artifact_stem = build_artifact_stem(theme)
+    parts = theme_parts or meeting_theme_parts_from_text(theme)
+    theme_for_agents = parts.theme_for_agents or theme
+    artifact_stem = build_artifact_stem(parts.title)
     chat_log = MeetingChatLogWriter(artifact_stem=artifact_stem)
-    chat_log.log_meeting_start(theme)
+    chat_log.log_meeting_start(parts.overview)
+    if parts.details:
+        chat_log.append(
+            role="system",
+            message=f"テーマ詳細：{normalize_plain_text(parts.details)}",
+            msg_type="system",
+            phase="DIVERGENCE",
+            turn=0,
+        )
     if revision_guidance:
         chat_log.append(
             role="system",
@@ -1275,17 +1296,19 @@ async def run_meeting_round(
             phase="DIVERGENCE",
             turn=0,
         )
-    chat_log.log_president_message(theme, turn=1)
+    chat_log.log_president_message(parts.overview, turn=1)
+    if parts.details:
+        chat_log.log_president_message(parts.details, turn=1)
 
     final_pm_speech, history, final_decision = await orchestrator.execute_meeting(
-        theme,
+        theme_for_agents,
         meeting_channel,
         revision_guidance=revision_guidance,
         chat_log=chat_log,
     )
     _append_meeting_turn_audit_record(
         channel_id=meeting_channel.id,
-        theme=theme,
+        theme=theme_for_agents,
         revision_guidance=revision_guidance,
         trace=orchestrator.last_meeting_trace,
         history=history,
@@ -1346,7 +1369,7 @@ async def run_meeting_round(
         revision_guidance=revision_guidance_text,
         pm_agent=pm_agent,
         meeting_channel=meeting_channel,
-        theme=theme,
+        theme=theme_for_agents,
         rerun_meeting=run_meeting_round,
         artifact_stem=artifact_stem,
         meeting_log_path=chat_log.path,
@@ -1361,7 +1384,7 @@ async def run_meeting_round(
         {
             "message_id": summary_message.id,
             "channel_id": meeting_channel.id,
-            "theme": theme,
+            "theme": theme_for_agents,
             "final_recommendation": final_recommendation,
             "final_category": final_category,
             "revision_guidance": revision_guidance_text,

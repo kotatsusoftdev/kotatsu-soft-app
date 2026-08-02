@@ -10,8 +10,11 @@ from theme_proposal import (
     APPROACH_REMAP,
     ThemeProposalError,
     ThemeProposer,
+    build_meeting_theme_parts,
     build_meeting_theme_text,
     extract_avoid_pairs,
+    meeting_theme_parts_from_free_text,
+    meeting_theme_parts_from_text,
     normalize_approach_type,
     option_source_pair,
 )
@@ -423,28 +426,63 @@ def test_parse_skips_options_without_required_fields(tmp_path: Path) -> None:
     assert len(payload["options"]) == 3
 
 
-def test_build_meeting_theme_text() -> None:
-    text = build_meeting_theme_text(
+def test_build_meeting_theme_parts_splits_overview_and_details() -> None:
+    option = {
+        "title": "テスト案",
+        "concept_summary": "要約",
+        "approach_type": APPROACH_REMAP,
+        "design_intent": "宮廷料理人に置換した方がカオス",
+        "synergy_reason": "焦りを滑る操作で再現",
+        "viral_point": "バズ",
+        "combined_sources": {
+            "trend_label": "トレンド",
+            "mechanic_label": "メカニクス",
+        },
+    }
+    parts = build_meeting_theme_parts(option)
+    assert parts.title == "テスト案"
+    assert parts.overview == "テスト案\n\n要約"
+    assert "アプローチ: 世界観置換" in parts.details
+    assert "アプローチの狙い" in parts.details
+    assert "宮廷料理人に置換した方がカオス" in parts.details
+    assert "シナジー理由" in parts.details
+    assert "焦りを滑る操作で再現" in parts.details
+    assert "バズ" in parts.details
+    assert "トレンド" in parts.details
+    assert "メカニクス" in parts.details
+    assert "テスト案" not in parts.details
+    assert parts.details.startswith("アプローチ:")
+    assert parts.theme_for_agents.startswith("テーマ:\n")
+    assert "詳細:\n" in parts.theme_for_agents
+    assert "要約" in parts.theme_for_agents
+    assert "世界観置換" in parts.theme_for_agents
+
+    text = build_meeting_theme_text(option)
+    assert text == parts.theme_for_agents
+
+
+def test_meeting_theme_parts_from_free_text_uses_first_line_as_title() -> None:
+    parts = meeting_theme_parts_from_free_text("短いタイトル\n\n長い本文")
+    assert parts.title == "短いタイトル"
+    assert parts.overview == "短いタイトル\n\n長い本文"
+    assert parts.details == ""
+    assert parts.theme_for_agents == "短いタイトル\n\n長い本文"
+
+
+def test_meeting_theme_parts_from_text_roundtrip() -> None:
+    original = build_meeting_theme_parts(
         {
-            "title": "テスト案",
-            "concept_summary": "要約",
-            "approach_type": APPROACH_REMAP,
-            "design_intent": "宮廷料理人に置換した方がカオス",
-            "synergy_reason": "焦りを滑る操作で再現",
-            "viral_point": "バズ",
-            "combined_sources": {
-                "trend_label": "トレンド",
-                "mechanic_label": "メカニクス",
-            },
+            "title": "復元テスト",
+            "concept_summary": "概要文",
+            "approach_type": APPROACH_DIRECT,
+            "design_intent": "狙い",
+            "synergy_reason": "",
+            "viral_point": "",
+            "combined_sources": {},
         }
     )
-    assert "テスト案" in text
-    assert "要約" in text
-    assert "アプローチ: 世界観置換" in text
-    assert "アプローチの狙い" in text
-    assert "宮廷料理人に置換した方がカオス" in text
-    assert "シナジー理由" in text
-    assert "焦りを滑る操作で再現" in text
-    assert "バズ" in text
-    assert "トレンド" in text
-    assert "メカニクス" in text
+    restored = meeting_theme_parts_from_text(original.theme_for_agents)
+    assert restored.title == "復元テスト"
+    assert restored.overview == original.overview
+    assert "アプローチ: 元ネタ直球" in restored.details
+    assert "狙い" in restored.details

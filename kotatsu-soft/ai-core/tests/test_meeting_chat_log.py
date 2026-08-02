@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from artifact_naming import (
+    MAX_ARTIFACT_SLUG_CHARS,
     build_artifact_stem,
     meeting_log_filename,
     meeting_log_path,
@@ -12,12 +13,47 @@ from artifact_naming import (
     spec_path,
 )
 from meeting_chat_log import MeetingChatLogWriter, normalize_plain_text
+from theme_proposal import build_meeting_theme_parts
 
 
 def test_sanitize_artifact_slug() -> None:
     assert sanitize_artifact_slug("テトリスみたいなゲームを作って") == "テトリスみたいなゲームを作って"
     assert sanitize_artifact_slug("hello world!!") == "hello_world"
     assert sanitize_artifact_slug("   ") == "untitled"
+
+
+def test_sanitize_artifact_slug_truncates_long_input() -> None:
+    long_source = "あ" * 300
+    slug = sanitize_artifact_slug(long_source)
+    assert len(slug) <= MAX_ARTIFACT_SLUG_CHARS
+    stem = build_artifact_stem(long_source, datetime(2026, 8, 2, 11, 0, 0))
+    assert len(meeting_log_filename(stem)) <= 255
+
+
+def test_build_artifact_stem_uses_title_not_full_theme_dump() -> None:
+    parts = build_meeting_theme_parts(
+        {
+            "title": "トマホーク・エッグスタンド：物理法則完全無視の卵投げ",
+            "concept_summary": "どう見ても卵を置く気がない凶悪なトマホーク型の武器をフリック操作でぶん投げ、"
+            "移動するゴールに卵を破壊せずに着地させる物理演算バカゲー。"
+            + ("詳細詰め込み" * 40),
+            "approach_type": "元ネタ直球",
+            "design_intent": "長い狙い" * 30,
+            "synergy_reason": "長いシナジー" * 30,
+            "viral_point": "長いバズ" * 30,
+            "combined_sources": {
+                "trend_label": "長いトレンド" * 20,
+                "mechanic_label": "長いメカニクス" * 20,
+            },
+        }
+    )
+    ts = datetime(2026, 8, 2, 11, 22, 58)
+    stem = build_artifact_stem(parts.title, ts)
+    filename = meeting_log_filename(stem)
+    assert len(filename) <= 255
+    assert "トマホーク" in stem
+    assert "シナジー" not in stem
+    assert "バズ" not in stem
 
 
 def test_build_artifact_stem_uses_shared_timestamp() -> None:

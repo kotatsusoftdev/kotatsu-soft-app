@@ -4,6 +4,9 @@ from datetime import datetime
 from pathlib import Path
 import re
 
+# Windows filename limit is 255; keep room for meeting_/spec_/review_ + timestamp + ext.
+MAX_ARTIFACT_SLUG_CHARS = 80
+
 
 def sanitize_artifact_slug(source: str) -> str:
     slug = "".join(
@@ -11,6 +14,10 @@ def sanitize_artifact_slug(source: str) -> str:
         for c in (source or "").strip()
     )
     slug = re.sub(r"_+", "_", slug).strip("_")
+    if not slug:
+        return "untitled"
+    if len(slug) > MAX_ARTIFACT_SLUG_CHARS:
+        slug = slug[:MAX_ARTIFACT_SLUG_CHARS].rstrip("_-")
     return slug or "untitled"
 
 

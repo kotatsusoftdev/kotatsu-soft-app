@@ -1,6 +1,6 @@
 {
-  "last_updated": "2026-08-02T01:53:13Z",
-  "total_count": 24,
+  "last_updated": "2026-08-02T02:20:39Z",
+  "total_count": 36,
   "mechanics": [
     {
       "mechanic_id": "mech_grid_puzzle_slide_sokoban",
@@ -817,6 +817,414 @@
         "last_used_at": null
       },
       "first_added_at": "2026-08-02T01:53:13Z"
+    },
+    {
+      "mechanic_id": "mech_up_and_gun",
+      "dedupe_key": "vertical_auto_jump_shooting_up_and_gun",
+      "name": "垂直上昇オートジャンプシューティング",
+      "core_loop": "自動でジャンプし続けるキャラクターを左右に操作し、上から襲い来る敵を撃ち落としながらひたすら上方を目指す",
+      "inspiration": {
+        "source_title": "アップandガン",
+        "unique_motif": "レトロポップな縦スクロール空間でのドット絵シューティング",
+        "twist_gimmick": "プレイヤーの意志でジャンプできず常に跳ね続けるため、落下タイミングと射撃の軸合わせが常にズレる"
+      },
+      "tags": [
+        "2D",
+        "アクション",
+        "シューティング",
+        "縦スクロール"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "Rigidbody2D",
+          "InputSystem"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "シンプルな操作性と高難易度リトライのループでショート動画での実況に耐えうる",
+        "target_audience": "手軽に歯ごたえのあるアクションを楽しみたい層"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-02T02:20:39Z"
+    },
+    {
+      "mechanic_id": "mech_tiny_tank_tactic",
+      "dedupe_key": "grid_turn_based_tiny_tank_tactic",
+      "name": "ミニサイズ戦車グリッド戦術パズル",
+      "core_loop": "限られたマス目の中でミニ戦車を動かし、敵の砲撃予測線を避けつつ一撃必殺のカウンターを狙う",
+      "inspiration": {
+        "source_title": "Tiny Tank Tactic",
+        "unique_motif": "ミニチュアサイズの可愛い戦車がデスゲームに挑むタクティクス世界観",
+        "twist_gimmick": "移動と砲塔の向きが独立しており、1ターンに1アクションしか選べない極限のリソース制限"
+      },
+      "tags": [
+        "2D",
+        "ターン制",
+        "戦術",
+        "パズル"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 3,
+        "recommended_engine_features": [
+          "Tilemap",
+          "TurnManager"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "「あと1手で勝てたのに！」という悔しさがSNSでの攻略共有を促す",
+        "target_audience": "じっくり頭を使って一手先を読む戦略ゲーム好き"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-02T02:20:39Z"
+    },
+    {
+      "mechanic_id": "mech_slideokoban",
+      "dedupe_key": "inertia_slide_sokoban_slideokoban",
+      "name": "慣性スライド倉庫番パズル",
+      "core_loop": "氷の上のように止まらないキャラクターとブロックをスライドさせ、正しい位置に嵌め込む",
+      "inspiration": {
+        "source_title": "\"Slide\"okoban",
+        "unique_motif": "おなじみの倉庫番ルールを極限まで滑りやすくしたアイスブロック迷宮",
+        "twist_gimmick": "壁にぶつかるまで止まらない慣性ルールがあるため、通常の倉庫番の定石が一切通用しない"
+      },
+      "tags": [
+        "2D",
+        "パズル",
+        "倉庫番",
+        "慣性移動"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "GridSystem",
+          "Tweening"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "直感的なルール崩しによる「うわ、行き過ぎた！」のバグっぽい面白さ",
+        "target_audience": "頭の体操系パズルやアハ体験を好むプレイヤー"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-02T02:20:39Z"
+    },
+    {
+      "mechanic_id": "mech_trust_dotai_shiryoku",
+      "dedupe_key": "fast_moving_target_trust_dotai_shiryoku",
+      "name": "高速移動ターゲット動体視力テスト",
+      "core_loop": "画面内を不規則かつ超高速で動き回るターゲットを目視で追い、正確にクリック・タップする",
+      "inspiration": {
+        "source_title": "TRUST動体視力",
+        "unique_motif": "シンプルで無機質な検査画面を逆手に取った、ゲーマーの反射神経限界測定",
+        "twist_gimmick": "偽のターゲットや視界を遮るエフェクトが段階的に混ざり、純粋な視力だけでなくフェイント耐性が試される"
+      },
+      "tags": [
+        "2D",
+        "ミニゲーム",
+        "動体視力",
+        "反射神経"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 1,
+        "recommended_engine_features": [
+          "UI Canvas",
+          "Raycast2D"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "「私の動体視力は〇歳！」といったスコアシェアがX（旧Twitter）で拡散しやすい",
+        "target_audience": "自分の反射神経を試したいゲーマー層、配信者"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-02T02:20:39Z"
+    },
+    {
+      "mechanic_id": "mech_patient_run_way",
+      "dedupe_key": "hospital_bed_obstacle_run_patient_run_way",
+      "name": "暴走病院ベッド障害物ラン",
+      "core_loop": "暴走して加速し続ける患者のベッドを左右レーン移動とジャンプで制御し、病院内の障害物を避ける",
+      "inspiration": {
+        "source_title": "Patient(RUN WAY)",
+        "unique_motif": "点滴スタンドを引きずりながら病院廊下を爆走するシュールな患者",
+        "twist_gimmick": "速度が上がるにつれて視界が狭まり、医師や看護師の妨害キャラクターがランダムに飛び出してくる"
+      },
+      "tags": [
+        "2D",
+        "ランゲーム",
+        "シュール",
+        "障害物回避"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "ObjectPool",
+          "ParallaxScrolling"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "圧倒的にシュールなビジュアルと理不尽なスピード感が笑いを誘う",
+        "target_audience": "シュール系インディーゲームやバカゲー愛好家"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-02T02:20:39Z"
+    },
+    {
+      "mechanic_id": "mech_senbaduru_clicker",
+      "dedupe_key": "exponential_origami_crane_clicker",
+      "name": "千羽鶴無限折りクリッカー",
+      "core_loop": "ひたすら画面をタップして折り紙を折り、折った鶴の数でインフレ的な生産力を手に入れる",
+      "inspiration": {
+        "source_title": "千羽鶴クリッカー",
+        "unique_motif": "和風かつシュールにひたすら折られ続ける千羽鶴の山",
+        "twist_gimmick": "一定数を超えるごとに「折り手のおばあちゃん」や「鶴の恩返しシステム」などの自動化シナジーが爆発的にインフレする"
+      },
+      "tags": [
+        "2D",
+        "放置ゲーム",
+        "クリッカー",
+        "インフレ"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 1,
+        "recommended_engine_features": [
+          "BigInteger",
+          "UI System"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "桁外れな数字のインフレと、和風モチーフのシュールな組み合わせが話題になりやすい",
+        "target_audience": "数字が増える快感を好むクリッカーゲームファン"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-02T02:20:39Z"
+    },
+    {
+      "mechanic_id": "mech_tarou_summer_vacation",
+      "dedupe_key": "nostalgic_mini_collection_tarou_summer_vacation",
+      "name": "夏の思い出収集タイムアタック",
+      "core_loop": "限られた時間内にフィールドを駆け巡り、虫取りや魚釣りなどの夏休みイベントを効率よく回収する",
+      "inspiration": {
+        "source_title": "たろうくんの夏休み",
+        "unique_motif": "昭和レトロな田舎の風景と、少年時代の焦燥感を凝縮したノスタルジー",
+        "twist_gimmick": "夕方になると強制的にイベントが発生し、残したタスクによって結末が激変するマルチエンディング"
+      },
+      "tags": [
+        "2D",
+        "タイムアタック",
+        "ノスタルジー",
+        "収集"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "Tilemap",
+          "Timer"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "ノスタルジックな世界観がエモいと評価され、SNSのタイムラインで共感を呼ぶ",
+        "target_audience": "懐かしい雰囲気を愛する層、スピードラン好き"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-02T02:20:39Z"
+    },
+    {
+      "mechanic_id": "mech_sakana_game",
+      "dedupe_key": "evolution_merge_suika_like_sakana",
+      "name": "海洋生物スイカ式進化合体",
+      "core_loop": "小さな魚を落として同じ種類同士をぶつけ、より大きな海洋生物へと進化させていく",
+      "inspiration": {
+        "source_title": "サカナゲーム",
+        "unique_motif": "深海の水槽を模したエリアで魚たちがぷるぷる揺れながら重なる物理演算",
+        "twist_gimmick": "進化するごとに特殊な能力（他の魚を食べる、跳ねる等）が発動し、隙間を埋めるコンボが発生する"
+      },
+      "tags": [
+        "2D",
+        "パズル",
+        "物理演算",
+        "スイカゲームライク"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "Rigidbody2D",
+          "Collision2D"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "「あと少しで巨大サカナになったのに！」という連鎖の快感が中毒性を生む",
+        "target_audience": "万国共通のカジュアルパズルファン"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-02T02:20:39Z"
+    },
+    {
+      "mechanic_id": "mech_skeleton_expedition",
+      "dedupe_key": "auto_battle_dungeon_skeleton_expedition",
+      "name": "骸骨兵士オートダンジョン遠征",
+      "core_loop": "最弱の骸骨軍団を編成し、自動でダンジョンを攻略させながら戦利品で強化を繰り返す",
+      "inspiration": {
+        "source_title": "骸骨遠征団",
+        "unique_motif": "死してなお戦わされるガイコツたちの哀愁漂う放置系冒険",
+        "twist_gimmick": "全滅するたびに骨が散らばり、その場に「骨の障害物トラップ」として残り次の出撃に影響する"
+      },
+      "tags": [
+        "2D",
+        "放置系",
+        "ハクスラ",
+        "ダンジョン"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "ScriptableObject",
+          "SaveSystem"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "断末魔や骸骨ネタのシュールなテキストがSNSでネタにされやすい",
+        "target_audience": "放置ゲームやハクスラ育成が好きなコアゲーマー"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-02T02:20:39Z"
+    },
+    {
+      "mechanic_id": "mech_deep_sea_search",
+      "dedupe_key": "sonar_hidden_object_deep_sea_search",
+      "name": "ソナー探知ダーク海洋探索",
+      "core_loop": "真っ暗な深海の中でソナー（音波）を頼りに沈没船やレアな深海魚の位置を特定し引き上げる",
+      "inspiration": {
+        "source_title": "深海さがし（UNITY版）",
+        "unique_motif": "光の届かない漆黒の海、ソナーの波紋だけで世界を把握するホラー・探索テイスト",
+        "twist_gimmick": "ソナーを打ちすぎると巨大な深海生物に位置がバレて襲われるため、索敵と隠密のジレンマがある"
+      },
+      "tags": [
+        "2D",
+        "探索",
+        "ホラーテイスト",
+        "パズル"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "Shader2D",
+          "AudioSource"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "独特の不気味さと静寂の演出が配信者のリアクションを引き出しやすい",
+        "target_audience": "探索ゲームや雰囲気を重視するインディーゲームファン"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-02T02:20:39Z"
+    },
+    {
+      "mechanic_id": "mech_ayakotoba",
+      "dedupe_key": "yokai_word_chain_puzzle_ayakotoba",
+      "name": "妖怪しりとり因果律パズル",
+      "core_loop": "妖怪の名前を使った特殊なしりとりを行い、文字の長さや属性で敵にダメージを与える",
+      "inspiration": {
+        "source_title": "妖言葉（あやことば）",
+        "unique_motif": "怪しげな和風書道と妖怪たちがうごめく言葉遊びの空間",
+        "twist_gimmick": "特定の文字数や「呪われた文字」で繋ぐと、妖怪の封印が解けて画面全体に特殊効果が発動する"
+      },
+      "tags": [
+        "2D",
+        "言葉遊び",
+        "しりとり",
+        "和風パズル"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "TextMeshPro",
+          "Dictionary"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "変なワードや奇跡的なしりとり繋がりのスクショがバズりやすい",
+        "target_audience": "ワードパズルや和風デザインが好きな知性派プレイヤー"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-02T02:20:39Z"
+    },
+    {
+      "mechanic_id": "mech_unreal_aquarium",
+      "dedupe_key": "surreal_physics_aquarium_breeding",
+      "name": "非現実カオスアクアリウム育成",
+      "core_loop": "水槽の中に物理法則を無視した奇怪な生物を飼育し、エサをあげて異常進化させる",
+      "inspiration": {
+        "source_title": "非現実アクアリウム",
+        "unique_motif": "水槽の常識を覆すシュールでキモ可愛い生物たちがうごめく育成環境",
+        "twist_gimmick": "水質汚染や突然変異によって、生物同士が合体したり水槽のガラスを突き破ろうと暴れ出す"
+      },
+      "tags": [
+        "2D",
+        "育成",
+        "シュール",
+        "シミュレーション"
+      ],
+      "ai_dev_suitability": {
+        "is_1week_feasible": true,
+        "complexity_score": 2,
+        "recommended_engine_features": [
+          "Rigidbody2D",
+          "Coroutine"
+        ]
+      },
+      "market_appeal": {
+        "viral_potential": "「なんじゃこれ」と思わせるキモカワ生物のビジュアルがSNSで拡散の起爆剤になる",
+        "target_audience": "育成ゲームや変わったインディーゲームを好む層"
+      },
+      "usage_stats": {
+        "times_used": 0,
+        "last_used_at": null
+      },
+      "first_added_at": "2026-08-02T02:20:39Z"
     }
   ]
 }

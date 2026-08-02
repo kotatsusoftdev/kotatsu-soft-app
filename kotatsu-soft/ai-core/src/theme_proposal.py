@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import re
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -179,9 +180,29 @@ def option_source_pair(option: dict[str, Any]) -> tuple[str, str] | None:
     return (trend_id, mechanic_id)
 
 
-def build_meeting_theme_text(option: dict[str, Any]) -> str:
-    """企画会議に渡すテーマ文字列。"""
-    title = str(option.get("title") or "").strip()
+@dataclass(frozen=True)
+class MeetingThemeParts:
+    """会議投入用テーマの分割結果。"""
+
+    title: str
+    overview: str
+    details: str
+    theme_for_agents: str
+
+
+def _compose_theme_for_agents(overview: str, details: str) -> str:
+    overview = (overview or "").strip()
+    details = (details or "").strip()
+    if not overview and not details:
+        return "untitled"
+    if details:
+        return f"テーマ:\n{overview}\n\n詳細:\n{details}"
+    return f"テーマ:\n{overview}"
+
+
+def build_meeting_theme_parts(option: dict[str, Any]) -> MeetingThemeParts:
+    """案オプションを名称・概要・詳細に分割する。"""
+    title = str(option.get("title") or "").strip() or "untitled"
     summary = str(option.get("concept_summary") or "").strip()
     approach = normalize_approach_type(option.get("approach_type")) or str(
         option.get("approach_type") or ""
@@ -198,20 +219,74 @@ def build_meeting_theme_text(option: dict[str, Any]) -> str:
     mech_label = str(
         sources.get("mechanic_label") or sources.get("mechanic_id") or ""
     ).strip()
-    parts = [title]
-    if summary:
-        parts.append(summary)
+
+    overview = "\n\n".join(p for p in (title, summary) if p)
+    detail_parts: list[str] = []
     if approach:
-        parts.append(f"アプローチ: {approach}")
+        detail_parts.append(f"アプローチ: {approach}")
     if design_intent:
-        parts.append(f"アプローチの狙い: {design_intent}")
+        detail_parts.append(f"アプローチの狙い: {design_intent}")
     if synergy:
-        parts.append(f"シナジー理由: {synergy}")
+        detail_parts.append(f"シナジー理由: {synergy}")
     if viral:
-        parts.append(f"バズポイント: {viral}")
+        detail_parts.append(f"バズポイント: {viral}")
     if trend_label or mech_label:
-        parts.append(f"参照: トレンド={trend_label} / メカニクス={mech_label}")
-    return "\n\n".join(p for p in parts if p)
+        detail_parts.append(f"参照: トレンド={trend_label} / メカニクス={mech_label}")
+    details = "\n\n".join(detail_parts)
+    return MeetingThemeParts(
+        title=title,
+        overview=overview,
+        details=details,
+        theme_for_agents=_compose_theme_for_agents(overview, details),
+    )
+
+
+def meeting_theme_parts_from_free_text(theme: str) -> MeetingThemeParts:
+    """フリー入力テーマを MeetingThemeParts に変換する。"""
+    text = (theme or "").strip()
+    if not text:
+        return MeetingThemeParts(
+            title="untitled",
+            overview="untitled",
+            details="",
+            theme_for_agents="untitled",
+        )
+    first_line = text.splitlines()[0].strip() or "untitled"
+    return MeetingThemeParts(
+        title=first_line,
+        overview=text,
+        details="",
+        theme_for_agents=text,
+    )
+
+
+def meeting_theme_parts_from_text(theme: str) -> MeetingThemeParts:
+    """agents 用テーマ文字列（またはフリー入力）から分割結果を復元する。"""
+    text = (theme or "").strip()
+    if not text:
+        return meeting_theme_parts_from_free_text("")
+    if text.startswith("テーマ:"):
+        body = text[len("テーマ:") :].lstrip("\n")
+        if "\n\n詳細:" in body:
+            overview, details = body.split("\n\n詳細:", 1)
+            overview = overview.strip()
+            details = details.strip()
+        else:
+            overview = body.strip()
+            details = ""
+        title = overview.splitlines()[0].strip() if overview else "untitled"
+        return MeetingThemeParts(
+            title=title or "untitled",
+            overview=overview or title or "untitled",
+            details=details,
+            theme_for_agents=text,
+        )
+    return meeting_theme_parts_from_free_text(text)
+
+
+def build_meeting_theme_text(option: dict[str, Any]) -> str:
+    """企画会議に渡すテーマ文字列（agents 用。互換 API）。"""
+    return build_meeting_theme_parts(option).theme_for_agents
 
 
 class ThemeProposer:

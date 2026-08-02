@@ -77,7 +77,10 @@ async def test_start_meeting_from_theme_posts_ack_to_planning_channel(
     await main.start_meeting_from_theme("new game idea", order_channel=order_channel)
 
     fetch_mock.assert_awaited_once_with(cfg.MEETING_CHANNEL_ID)
-    run_meeting_mock.assert_awaited_once_with("new game idea", planning_channel)
+    run_meeting_mock.assert_awaited_once()
+    assert run_meeting_mock.await_args.args[0] == "new game idea"
+    assert run_meeting_mock.await_args.args[1] is planning_channel
+    assert run_meeting_mock.await_args.kwargs["theme_parts"].title == "new game idea"
     assert order_channel.messages == []
     assert any(
         str(item["content"]).startswith("📥 了解しました")
